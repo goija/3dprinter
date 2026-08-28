@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mijn 3D Print STL Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1e1e1e;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #ffffff;
+        }
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 1.2rem;
+            color: #4da6ff;
+        }
+        input[type="file"] {
+            display: block;
+            margin-top: 10px;
+            color: #ddd;
+        }
+        #instructions {
+            font-size: 0.85rem;
+            color: #aaa;
+            margin-top: 10px;
+        }
+        
+        /* Nieuw: Styling voor het drag & drop veld */
+        #drop-zone {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(77, 166, 255, 0.2);
+            border: 5px dashed #4da6ff;
+            box-sizing: border-box;
+            display: none; /* Standaard verborgen */
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            pointer-events: none; /* Laat muiskliks door naar de 3D scene */
+        }
+        /* Zichtbaar als je er een bestand overheen sleept */
+        #drop-zone.active {
+            display: flex;
+        }
+        #drop-zone h2 {
+            font-size: 3rem;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Drag & Drop overlay -->
+    <div id="drop-zone">
+        <h2>Laat je STL bestand hier los</h2>
+    </div>
+
+    <!-- Gebruikersinterface -->
+    <div id="ui-container">
+        <h1>STL Viewer</h1>
+        <label for="file-input">Selecteer of sleep een .stl bestand:</label>
+        <input type="file" id="file-input" accept=".stl">
+        <div id="instructions">
+            Sleep bestand in scherm<br><br>
+            Muis links: Roteren<br>
+            Muis rechts: Verschuiven<br>
+            Scrollen: Zoomen
+        </div>
+    </div>
+
+    <!-- Importmap voor Three.js modules -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Basis Setup
+        const scene = new THREE.Scene();
+        const gridHelper = new THREE.GridHelper(200, 50, 0x444444, 0x222222);
+        gridHelper.position.y = -0.1;
+        scene.add(gridHelper);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 100, 150);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Belichting
+        const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+        directionalLight.position.set(1, 1, 1).normalize();
+        scene.add(directionalLight);
+
+        const backLight = new THREE.DirectionalLight(0xffffff, 1);
+        backLight.position.set(-1, 0.5, -1).normalize();
+        scene.add(backLight);
+
+        let currentMesh = null;
+
+        // --- NIEUW: Algemene functie om een STL in te laden ---
+        function loadSTL(file) {
+            // Controleer of het een STL is
+            if (!file.name.toLowerCase().endsWith('.stl')) {
+                alert('Selecteer a.u.b. een .stl bestand!');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const contents = e.target.result;
+                const loader = new STLLoader();
+                const geometry = loader.parse(contents);
+
+                if (currentMesh !== null) {
+                    scene.remove(currentMesh);
+                    currentMesh.geometry.dispose();
+                    currentMesh.material.dispose();
+                }
+
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: 0x4da6ff, 
+                    roughness: 0.5,
+                    metalness: 0.1
+                });
+
+                currentMesh = new THREE.Mesh(geometry, material);
+
+                geometry.computeBoundingBox();
+                const boundingBox = geometry.boundingBox;
+                const center = new THREE.Vector3();
+                boundingBox.getCenter(center);
+                currentMesh.position.sub(center);
+                currentMesh.rotation.x = -Math.PI / 2;
+
+                scene.add(currentMesh);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // --- Event Listener voor de knop ---
+        document.getElementById('file-input').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) loadSTL(file);
+        });
+
+        // --- NIEUW: Event Listeners voor Drag & Drop ---
+        const dropZone = document.getElementById('drop-zone');
+
+        // Voorkom standaard browser gedrag (anders opent hij het bestand gewoon als platte tekst/download)
+        window.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dropZone.classList.add('active'); // Toon de blauwe rand
+        });
+
+        window.addEventListener('dragleave', (event) => {
+            event.preventDefault();
+            // Voorkom flikkeren van de rand als je de muis over interne elementen beweegt
+            if (event.relatedTarget === null || event.relatedTarget.nodeName === "HTML") {
+                dropZone.classList.remove('active');
+            }
+        });
+
+        window.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dropZone.classList.remove('active'); // Verberg de blauwe rand
+
+            // Pak het eerste bestand dat gedropt is
+            if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+                const file = event.dataTransfer.files[0];
+                loadSTL(file);
+            }
+        });
+
+        // Animatie & Resize
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
