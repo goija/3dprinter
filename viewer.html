@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mijn 3D Print STL Viewer</title>
+    <title>Systeem Console - 3D STL Viewer & Exporter</title>
     <style>
+        /* --- BASIS STYLING --- */
         body {
             margin: 0;
             overflow: hidden;
@@ -12,81 +13,206 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: #ffffff;
         }
-        #ui-container {
+
+        /* --- CONSOLE CONTAINER --- */
+        .system-console {
             position: absolute;
             top: 20px;
             left: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 15px 25px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            width: 320px;
+            background-color: #1a1e24;
+            color: #b0bac5;
+            border-radius: 6px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            font-size: 13px;
+            overflow: hidden;
+            border: 1px solid #2a3038;
             z-index: 10;
+            max-height: 95vh;
+            overflow-y: auto;
         }
-        h1 {
-            margin: 0 0 10px 0;
-            font-size: 1.2rem;
-            color: #4da6ff;
+
+        /* Scrollbar styling voor de console */
+        .system-console::-webkit-scrollbar { width: 6px; }
+        .system-console::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+        /* --- HEADERS & TITELS --- */
+        .console-header {
+            background-color: #15181d;
+            color: #5ba4e5;
+            text-align: center;
+            padding: 12px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #2a3038;
+            text-transform: uppercase;
         }
-        input[type="file"] {
-            display: block;
-            margin-top: 10px;
-            color: #ddd;
+
+        .section-title {
+            color: #5ba4e5;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
-        #instructions {
-            font-size: 0.85rem;
-            color: #aaa;
-            margin-top: 10px;
+
+        .console-section {
+            padding: 15px;
+            border-bottom: 1px solid #2a3038;
+        }
+        .console-section:last-child {
+            border-bottom: none;
+        }
+
+        /* --- FILE INPUT & TEXT --- */
+        input[type="file"] { display: block; margin-top: 10px; color: #ddd; width: 100%; cursor: pointer; }
+        #instructions { font-size: 0.85rem; color: #aaa; margin-top: 10px; }
+        #loading { display: none; color: #ffeb3b; font-size: 0.9rem; font-weight: bold; margin-bottom: 10px;}
+
+        /* --- SLIDERS (RANGES) --- */
+        .control-group {
+            background-color: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin-bottom: 10px;
         }
         
-        /* Nieuw: Styling voor het drag & drop veld */
-        #drop-zone {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(77, 166, 255, 0.2);
-            border: 5px dashed #4da6ff;
-            box-sizing: border-box;
-            display: none; /* Standaard verborgen */
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-            pointer-events: none; /* Laat muiskliks door naar de 3D scene */
-        }
-        /* Zichtbaar als je er een bestand overheen sleept */
-        #drop-zone.active {
+        .control-label {
             display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-family: 'Courier New', Courier, monospace;
+            color: #e6edf3;
         }
-        #drop-zone h2 {
-            font-size: 3rem;
-            color: white;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-            pointer-events: none;
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 5px 0;
         }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; cursor: pointer;
+            background: #30363d; border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 14px; width: 14px; border-radius: 50%;
+            background: #5ba4e5; cursor: pointer;
+            -webkit-appearance: none; margin-top: -4px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+        
+        /* Dynamische Slider Fills */
+        .slider-trans { background: linear-gradient(to right, #5ba4e5 var(--val), #30363d var(--val)) !important; }
+        .slider-scale { background: linear-gradient(to right, #5ba4e5 var(--val), #30363d var(--val)) !important; }
+        .slider-rot   { background: linear-gradient(to right, #5ba4e5 var(--val), #30363d var(--val)) !important; }
+
+        /* --- KNOPPEN --- */
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .btn-action {
+            flex: 1; background-color: #21262d; color: #e6edf3;
+            border: 1px solid #30363d; padding: 8px;
+            border-radius: 4px; cursor: pointer;
+            transition: background-color 0.2s; font-family: inherit;
+        }
+        .btn-action:hover { background-color: #30363d; }
+        .btn-action.active { background-color: #5ba4e5; color: #15181d; font-weight: bold; }
+
+        /* Knoppen voor export */
+        .export-btn {
+            display: block; width: 100%; padding: 8px; margin-bottom: 8px;
+            background: #4da6ff; color: #1e1e1e; border: none;
+            border-radius: 4px; font-weight: bold; cursor: pointer;
+            opacity: 0.5; pointer-events: none; transition: opacity 0.2s;
+        }
+        .export-btn.active { opacity: 1; pointer-events: auto; }
+        .export-btn.active:hover { background: #66b3ff; }
+
+        /* --- DRAG & DROP VELD --- */
+        #drop-zone {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(77, 166, 255, 0.2); border: 5px dashed #4da6ff;
+            box-sizing: border-box; display: none; 
+            justify-content: center; align-items: center;
+            z-index: 100; pointer-events: none; 
+        }
+        #drop-zone.active { display: flex; }
+        #drop-zone h2 { font-size: 3rem; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); }
     </style>
+    
+    <script src="https://cdn.jsdelivr.net/npm/gifshot@0.3.2/build/gifshot.min.js"></script>
 </head>
 <body>
 
-    <!-- Drag & Drop overlay -->
     <div id="drop-zone">
         <h2>Laat je STL bestand hier los</h2>
     </div>
 
-    <!-- Gebruikersinterface -->
-    <div id="ui-container">
-        <h1>STL Viewer</h1>
-        <label for="file-input">Selecteer of sleep een .stl bestand:</label>
-        <input type="file" id="file-input" accept=".stl">
-        <div id="instructions">
-            Sleep bestand in scherm<br><br>
-            Muis links: Roteren<br>
-            Muis rechts: Verschuiven<br>
-            Scrollen: Zoomen
+    <div class="system-console">
+        <div class="console-header">SYSTEEM TOOL / CONSOLE</div>
+        
+        <div class="console-section">
+            <div class="section-title">📂 BESTAND INLADEN</div>
+            <label for="file-input">Selecteer of sleep een .stl bestand:</label>
+            <input type="file" id="file-input" accept=".stl">
+            <div id="instructions">
+                <strong>Camera Bediening:</strong><br>
+                Muis links: Roteren | Muis rechts: Verschuiven<br>
+                Scrollen: Zoomen
+            </div>
+        </div>
+        
+        <div class="console-section">
+            <div class="section-title">⚙ BEDIENING: 3D MODEL</div>
+            
+            <div class="control-group">
+                <div class="control-label">
+                    <span>Transparantie:</span>
+                    <span id="trans-text">1.0</span>
+                </div>
+                <input type="range" id="trans-slider" class="slider-trans" min="0.1" max="1" step="0.1" value="1.0">
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">
+                    <span>Schaal:</span>
+                    <span id="scale-text">1.00x</span>
+                </div>
+                <input type="range" id="scale-slider" class="slider-scale" min="0.1" max="5" step="0.1" value="1.0">
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">
+                    <span>Rotatie (Z-As):</span>
+                    <span id="rot-text">0°</span>
+                </div>
+                <input type="range" id="rot-slider" class="slider-rot" min="-180" max="180" step="1" value="0">
+            </div>
+
+            <div class="button-group" style="margin-bottom: 0;">
+                <button class="btn-action" id="btn-flip-x">↔ Spiegel X</button>
+                <button class="btn-action" id="btn-flip-y">↕ Spiegel Y</button>
+            </div>
+        </div>
+
+        <div class="console-section">
+            <div class="section-title">💾 EXPORT MODULE</div>
+            <div id="loading">Bezig met verwerken...</div>
+            <button id="btn-jpg" class="export-btn">📸 Opslaan als JPG</button>
+            <button id="btn-svg" class="export-btn">📐 Opslaan als SVG (Vector)</button>
+            <button id="btn-gif" class="export-btn">🎬 Opslaan als GIF (Animatie)</button>
         </div>
     </div>
 
-    <!-- Importmap voor Three.js modules -->
     <script type="importmap">
         {
             "imports": {
@@ -100,9 +226,12 @@
         import * as THREE from 'three';
         import { STLLoader } from 'three/addons/loaders/STLLoader.js';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { SVGRenderer } from 'three/addons/renderers/SVGRenderer.js';
 
-        // Basis Setup
+        // --- BASIS SETUP THREE.JS ---
         const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1e1e1e); 
+
         const gridHelper = new THREE.GridHelper(200, 50, 0x444444, 0x222222);
         gridHelper.position.y = -0.1;
         scene.add(gridHelper);
@@ -110,7 +239,7 @@
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 100, 150);
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
@@ -119,23 +248,98 @@
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
 
-        // Belichting
         const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
         scene.add(ambientLight);
-
         const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
         directionalLight.position.set(1, 1, 1).normalize();
         scene.add(directionalLight);
-
         const backLight = new THREE.DirectionalLight(0xffffff, 1);
         backLight.position.set(-1, 0.5, -1).normalize();
         scene.add(backLight);
 
         let currentMesh = null;
+        let isProcessing = false;
+        
+        // Model Transform Variabelen
+        let modelScale = 1.0;
+        let flipX = 1;
+        let flipY = 1;
 
-        // --- NIEUW: Algemene functie om een STL in te laden ---
+        // --- UI LOGICA (SLIDERS & KNOPPEN) ---
+        const transSlider = document.getElementById('trans-slider');
+        const scaleSlider = document.getElementById('scale-slider');
+        const rotSlider = document.getElementById('rot-slider');
+        
+        function updateSliderFill(slider) {
+            const percentage = ((slider.value - slider.min) / (slider.max - slider.min)) * 100;
+            slider.style.setProperty('--val', `${percentage}%`);
+        }
+
+        function applyTransforms() {
+            if (!currentMesh) return;
+            currentMesh.scale.set(modelScale * flipX, modelScale * flipY, modelScale);
+        }
+
+        transSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            document.getElementById('trans-text').textContent = val.toFixed(1);
+            updateSliderFill(e.target);
+            if (currentMesh) {
+                currentMesh.material.transparent = true;
+                currentMesh.material.opacity = val;
+            }
+        });
+
+        scaleSlider.addEventListener('input', (e) => {
+            modelScale = parseFloat(e.target.value);
+            document.getElementById('scale-text').textContent = `${modelScale.toFixed(2)}x`;
+            updateSliderFill(e.target);
+            applyTransforms();
+        });
+
+        rotSlider.addEventListener('input', (e) => {
+            const deg = parseFloat(e.target.value);
+            document.getElementById('rot-text').textContent = `${deg}°`;
+            updateSliderFill(e.target);
+            if (currentMesh) {
+                // Roteer om de Z-as (aangezien de STL plat ligt op X)
+                currentMesh.rotation.z = deg * Math.PI / 180;
+            }
+        });
+
+        document.getElementById('btn-flip-x').addEventListener('click', function() {
+            this.classList.toggle('active');
+            flipX = this.classList.contains('active') ? -1 : 1;
+            applyTransforms();
+        });
+
+        document.getElementById('btn-flip-y').addEventListener('click', function() {
+            this.classList.toggle('active');
+            flipY = this.classList.contains('active') ? -1 : 1;
+            applyTransforms();
+        });
+
+        // Initialize slider visuals
+        updateSliderFill(transSlider);
+        updateSliderFill(scaleSlider);
+        updateSliderFill(rotSlider);
+
+        // --- HULPFUNCTIE: Bestand Downloaden ---
+        function downloadFile(dataUrl, filename) {
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function toggleLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        // --- STL INLADEN ---
         function loadSTL(file) {
-            // Controleer of het een STL is
             if (!file.name.toLowerCase().endsWith('.stl')) {
                 alert('Selecteer a.u.b. een .stl bestand!');
                 return;
@@ -154,9 +358,8 @@
                 }
 
                 const material = new THREE.MeshStandardMaterial({ 
-                    color: 0x4da6ff, 
-                    roughness: 0.5,
-                    metalness: 0.1
+                    color: 0x4da6ff, roughness: 0.5, metalness: 0.1,
+                    transparent: true, opacity: parseFloat(transSlider.value)
                 });
 
                 currentMesh = new THREE.Mesh(geometry, material);
@@ -166,48 +369,102 @@
                 const center = new THREE.Vector3();
                 boundingBox.getCenter(center);
                 currentMesh.position.sub(center);
+                
+                // Leg de STL plat (standaard)
                 currentMesh.rotation.x = -Math.PI / 2;
+                
+                // Pas eventuele slider-rotaties/schaling direct toe
+                currentMesh.rotation.z = parseFloat(rotSlider.value) * Math.PI / 180;
+                applyTransforms();
 
                 scene.add(currentMesh);
+
+                document.querySelectorAll('.export-btn').forEach(btn => btn.classList.add('active'));
             };
             reader.readAsArrayBuffer(file);
         }
 
-        // --- Event Listener voor de knop ---
-        document.getElementById('file-input').addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (file) loadSTL(file);
+        // --- EXPORT: JPG ---
+        document.getElementById('btn-jpg').addEventListener('click', () => {
+            if (!currentMesh || isProcessing) return;
+            renderer.render(scene, camera); 
+            const dataUrl = renderer.domElement.toDataURL('image/jpeg', 0.9);
+            downloadFile(dataUrl, '3d_model.jpg');
         });
 
-        // --- NIEUW: Event Listeners voor Drag & Drop ---
+        // --- EXPORT: SVG ---
+        document.getElementById('btn-svg').addEventListener('click', () => {
+            if (!currentMesh || isProcessing) return;
+            
+            alert("Let op: Het genereren van een vector (SVG) van een 3D model is rekenintensief. Je browser kan even vastlopen tijdens het rekenen.");
+            
+            const svgRenderer = new SVGRenderer();
+            svgRenderer.setSize(window.innerWidth, window.innerHeight);
+            
+            const originalMaterial = currentMesh.material;
+            currentMesh.material = new THREE.MeshBasicMaterial({ color: 0x4da6ff });
+            
+            svgRenderer.render(scene, camera);
+            
+            currentMesh.material = originalMaterial;
+
+            const svgXML = svgRenderer.domElement.outerHTML;
+            const blob = new Blob([svgXML], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            downloadFile(url, '3d_model.svg');
+        });
+
+        // --- EXPORT: GIF (Animatie) ---
+        document.getElementById('btn-gif').addEventListener('click', () => {
+            if (!currentMesh || isProcessing) return;
+            isProcessing = true;
+            toggleLoading(true);
+
+            const frames = [];
+            const numFrames = 20;
+            const originalRotation = currentMesh.rotation.z;
+
+            for(let i = 0; i < numFrames; i++) {
+                currentMesh.rotation.z = originalRotation + (i * (Math.PI * 2) / numFrames);
+                renderer.render(scene, camera);
+                frames.push(renderer.domElement.toDataURL('image/jpeg', 0.5)); 
+            }
+            
+            currentMesh.rotation.z = originalRotation;
+
+            window.gifshot.createGIF({
+                images: frames,
+                gifWidth: Math.min(window.innerWidth, 600),
+                gifHeight: Math.min(window.innerHeight, 450),
+                interval: 0.1 
+            }, function(obj) {
+                isProcessing = false;
+                toggleLoading(false);
+                if(!obj.error) {
+                    downloadFile(obj.image, '3d_model_animatie.gif');
+                } else {
+                    alert("Er ging iets mis bij het maken van de GIF.");
+                }
+            });
+        });
+
+        // --- DRAG & DROP EVENTS ---
+        document.getElementById('file-input').addEventListener('change', (e) => {
+            if (e.target.files[0]) loadSTL(e.target.files[0]);
+        });
+
         const dropZone = document.getElementById('drop-zone');
-
-        // Voorkom standaard browser gedrag (anders opent hij het bestand gewoon als platte tekst/download)
-        window.addEventListener('dragover', (event) => {
-            event.preventDefault();
-            dropZone.classList.add('active'); // Toon de blauwe rand
+        window.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('active'); });
+        window.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            if (e.relatedTarget === null || e.relatedTarget.nodeName === "HTML") dropZone.classList.remove('active');
+        });
+        window.addEventListener('drop', (e) => {
+            e.preventDefault(); dropZone.classList.remove('active');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) loadSTL(e.dataTransfer.files[0]);
         });
 
-        window.addEventListener('dragleave', (event) => {
-            event.preventDefault();
-            // Voorkom flikkeren van de rand als je de muis over interne elementen beweegt
-            if (event.relatedTarget === null || event.relatedTarget.nodeName === "HTML") {
-                dropZone.classList.remove('active');
-            }
-        });
-
-        window.addEventListener('drop', (event) => {
-            event.preventDefault();
-            dropZone.classList.remove('active'); // Verberg de blauwe rand
-
-            // Pak het eerste bestand dat gedropt is
-            if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
-                const file = event.dataTransfer.files[0];
-                loadSTL(file);
-            }
-        });
-
-        // Animatie & Resize
+        // --- ANIMATIE LOOP ---
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
@@ -215,12 +472,11 @@
         }
         animate();
 
-        window.addEventListener('resize', onWindowResize, false);
-        function onWindowResize() {
+        window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-        }
+        });
     </script>
 </body>
 </html>
