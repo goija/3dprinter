@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STL Viewer - Auto-Fit</title>
+    <title>STL Viewer - Lokale Bestandsupload</title>
     <style>
         body { 
             margin: 0; 
@@ -22,15 +22,9 @@
             border-radius: 4px;
             border: 1px solid #333;
         }
-        select { 
-            padding: 8px; 
-            background: #222; 
-            color: #00ffcc; 
-            border: 1px solid #444; 
-            border-radius: 4px;
-            font-family: monospace;
-            cursor: pointer;
-            outline: none;
+        input[type="file"] {
+            margin-top: 10px;
+            color: #00ffcc;
         }
         #status {
             margin-top: 10px;
@@ -50,12 +44,9 @@
 </head>
 <body>
     <div id="ui-container">
-        <label for="model-select"><b>BESTAND:</b> </label>
-        <select id="model-select">
-            <option value="quatum.stl">quatum.stl</option>
-            <option value="doorsapuiklep.stl">doorsapuiklep.stl</option>
-        </select>
-        <div id="status">Laden...</div>
+        <label><b>KIES EEN STL BESTAND:</b></label><br>
+        <input type="file" id="file-input" accept=".stl">
+        <div id="status">Wacht op bestand...</div>
     </div>
 
     <script type="module">
@@ -67,7 +58,6 @@
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x1a1a1a);
         
-        // Grid wordt later dynamisch geschaald op basis van het model
         let gridHelper = new THREE.GridHelper(100, 50, 0x444444, 0x222222);
         scene.add(gridHelper);
 
@@ -82,7 +72,7 @@
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
 
-        // 2. Krachtigere belichting (DoubleSide material om normals problemen op te vangen)
+        // 2. Belichting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); 
         scene.add(ambientLight);
 
@@ -94,81 +84,85 @@
         dirLight2.position.set(-100, -100, -100);
         scene.add(dirLight2);
 
-        // 3. Loader & Auto-Fit Logica
-        const loader = new STLLoader();
+        // 3. Bestand inlezen en renderen
         let currentMesh = null;
         const statusDiv = document.getElementById('status');
+        const loader = new STLLoader();
         
         const material = new THREE.MeshStandardMaterial({ 
             color: 0x2ca02c, 
             roughness: 0.4,
             metalness: 0.1,
-            side: THREE.DoubleSide // Toont ook de binnenkant als de normals verkeerd om staan
+            side: THREE.DoubleSide
         });
 
-        function loadModel(filename) {
-            statusDiv.innerText = `Laden van ${filename}...`;
+        document.getElementById('file-input').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            statusDiv.innerText = `Inlezen van ${file.name}...`;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    // Gebruik parse() i.p.v. load() omdat we de ruwe data al hebben
+                    const geometry = loader.parse(e.target.result);
+                    toonModel(geometry, file.name);
+                } catch (error) {
+                    statusDiv.innerText = `Fout bij verwerken van bestand!`;
+                    console.error(error);
+                }
+            };
             
+            // Lees het bestand als een ArrayBuffer (vereist voor STL parsing)
+            reader.readAsArrayBuffer(file);
+        });
+
+        function toonModel(geometry, filename) {
             if (currentMesh) {
                 scene.remove(currentMesh);
                 currentMesh.geometry.dispose();
             }
 
-            loader.load(filename, function (geometry) {
-                geometry.computeVertexNormals();
-                geometry.computeBoundingBox();
-                
-                // Bereken centrum en verplaats het model exact naar [0,0,0]
-                const center = new THREE.Vector3();
-                geometry.boundingBox.getCenter(center);
-                geometry.translate(-center.x, -center.y, -center.z);
-                
-                // Bepaal de maximale afmeting
-                const size = new THREE.Vector3();
-                geometry.boundingBox.getSize(size);
-                const maxDim = Math.max(size.x, size.y, size.z);
-                
-                currentMesh = new THREE.Mesh(geometry, material);
-                scene.add(currentMesh);
-                
-                // Pas het grid aan op de grootte van het model
-                scene.remove(gridHelper);
-                gridHelper = new THREE.GridHelper(maxDim * 2, 20, 0x444444, 0x222222);
-                gridHelper.position.y = -size.y / 2; // Zet grid onder het model
-                scene.add(gridHelper);
+            geometry.computeVertexNormals();
+            geometry.computeBoundingBox();
+            
+            // Centreer model
+            const center = new THREE.Vector3();
+            geometry.boundingBox.getCenter(center);
+            geometry.translate(-center.x, -center.y, -center.z);
+            
+            // Bereken grootte voor auto-fit
+            const size = new THREE.Vector3();
+            geometry.boundingBox.getSize(size);
+            const maxDim = Math.max(size.x, size.y, size.z);
+            
+            currentMesh = new THREE.Mesh(geometry, material);
+            scene.add(currentMesh);
+            
+            // Pas grid aan
+            scene.remove(gridHelper);
+            gridHelper = new THREE.GridHelper(maxDim * 2, 20, 0x444444, 0x222222);
+            gridHelper.position.y = -size.y / 2;
+            scene.add(gridHelper);
 
-                // CAMERA AUTO-FIT LOGICA
-                const fov = camera.fov * (Math.PI / 180);
-                let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-                cameraZ *= 1.5; // 50% extra marge rondom het model
-                
-                // Pas de near/far planes dynamisch aan om clipping te voorkomen
-                camera.near = maxDim / 100;
-                camera.far = maxDim * 100;
-                camera.updateProjectionMatrix();
-                
-                // Zet camera schuin boven het object
-                camera.position.set(cameraZ * 0.8, cameraZ * 0.5, cameraZ);
-                camera.lookAt(0, 0, 0);
-                controls.target.set(0, 0, 0);
-                controls.update();
+            // Camera auto-fit
+            const fov = camera.fov * (Math.PI / 180);
+            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
+            
+            camera.near = maxDim / 100;
+            camera.far = maxDim * 100;
+            camera.updateProjectionMatrix();
+            
+            camera.position.set(cameraZ * 0.8, cameraZ * 0.5, cameraZ);
+            camera.lookAt(0, 0, 0);
+            controls.target.set(0, 0, 0);
+            controls.update();
 
-                statusDiv.innerText = `Geladen: ${filename} (Grootte: ${maxDim.toFixed(2)})`;
-
-            }, undefined, function (error) {
-                statusDiv.innerText = `Fout bij laden!`;
-                console.error(error);
-            });
+            statusDiv.innerText = `Succes: ${filename}`;
         }
 
-        // 4. Events
-        const selectElement = document.getElementById('model-select');
-        loadModel(selectElement.value);
-
-        selectElement.addEventListener('change', (event) => {
-            loadModel(event.target.value);
-        });
-
+        // 4. Venster schalen & Animatie loop
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
