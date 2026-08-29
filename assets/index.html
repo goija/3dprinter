@@ -1,36 +1,30 @@
-
 <!DOCTYPE html>
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STL Viewer - doorsapuiklep</title>
+    <title>STL Viewer - doorsapuiklep.stl</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #222; color: white; font-family: sans-serif; text-align: center; }
-        #info { position: absolute; top: 10px; width: 100%; z-index: 100; pointer-events: none; }
-        #info a { pointer-events: auto; color: #4dc0e0; }
+        body { margin: 0; overflow: hidden; background-color: #1e1e1e; color: #f0f0f0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; }
+        #info { position: absolute; top: 15px; width: 100%; z-index: 100; pointer-events: none; }
+        h2 { margin: 0 0 5px 0; color: #4dc0e0; }
+        p { margin: 0; font-size: 14px; }
         canvas { display: block; }
     </style>
-    <!-- Three.js Library -->
+    <!-- Three.js en STLLoader -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- STL Loader -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
-    <!-- Orbit Controls (voor het draaien met de muis) -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
     <div id="info">
-        <h2>3D Viewer: doorsapuiklep.stl</h2>
+        <h2>Romeinse Klepduiker (doorsapuiklep.stl)</h2>
         <p>Referentie: <strong>De Geometrische Sleutel van de Romeinse Infrastructuur</strong></p>
-        <p>Sleep met uw muis om te draaien, scroll om in te zoomen. <br>
-           <em>Zorg ervoor dat het bestand 'doorsapuiklep.stl' in dezelfde map staat als dit index.html bestand.</em></p>
+        <p><em>Gebruik de muis om te draaien (linksklik) en in te zoomen (scroll).</em></p>
     </div>
 
     <script>
-        // Opzetten van de scene, camera en renderer
         let scene = new THREE.Scene();
-        scene.background = new THREE.Color( 0x2a2b2e );
-
         let camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.1, 1000 );
         camera.position.set( 30, 20, 30 );
 
@@ -38,51 +32,38 @@
         renderer.setSize( window.innerWidth, window.innerHeight );
         document.body.appendChild( renderer.domElement );
 
-        // Navigatie instellen
         let controls = new THREE.OrbitControls( camera, renderer.domElement );
         controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
+        
+        // Belichting
+        scene.add( new THREE.AmbientLight( 0x404040, 1.5 ) );
+        let dirLight = new THREE.DirectionalLight( 0xffffff, 1 );
+        dirLight.position.set( 10, 20, 10 );
+        scene.add( dirLight );
 
-        // Verlichting toevoegen
-        scene.add( new THREE.AmbientLight( 0x444444 ) );
-        let light = new THREE.DirectionalLight( 0xffffff, 1 );
-        light.position.set( 1, 1, 1 ).normalize();
-        scene.add( light );
-
-        // Het inladen van doorsapuiklep.stl
+        // STL Inladen
         let loader = new THREE.STLLoader();
         loader.load( 'doorsapuiklep.stl', function ( geometry ) {
-            // Centreer het model automatisch
             geometry.center();
             geometry.computeVertexNormals();
-
-            // Kleur en materiaal instellen
-            let material = new THREE.MeshPhongMaterial( { color: 0x3a82c4, specular: 0x111111, shininess: 50 } );
+            let material = new THREE.MeshPhongMaterial( { color: 0x8B4513, specular: 0x111111, shininess: 30 } );
             let mesh = new THREE.Mesh( geometry, material );
-            
-            // Corrigeer de rotatie als het model op zijn kant ligt
-            mesh.rotation.set( - Math.PI / 2, 0, 0 );
-            
+            mesh.rotation.x = -Math.PI / 2; // Zorg dat het model rechtop staat
             scene.add( mesh );
-        }, 
-        (xhr) => { console.log((xhr.loaded / xhr.total * 100) + '% geladen'); },
-        (error) => { console.error('Fout bij het laden van het model. Start een lokale webserver om CORS fouten te voorkomen.', error); }
-        );
+        });
 
-        // Hertekenen bij verandering van schermformaat
-        window.addEventListener( 'resize', function() {
+        window.addEventListener( 'resize', onWindowResize, false );
+        function onWindowResize(){
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize( window.innerWidth, window.innerHeight );
-        });
+        }
 
-        // Animatie loop
         function animate() {
             requestAnimationFrame( animate );
             controls.update();
             renderer.render( scene, camera );
         }
-        
         animate();
     </script>
 </body>
