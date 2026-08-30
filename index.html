@@ -1,829 +1,1035 @@
-<!DOCTYPE html>
-<html lang="nl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VORTEX OS - Modulaire 4D Architectuur (Fixed UI Overlay)</title>
-    
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    
-    <style>
-        body, html { 
-            margin: 0; padding: 0; height: 100%;
-            font-family: 'Courier New', Courier, monospace; 
-            background-color: #05070a; color: #ffffff;
-            overflow: hidden; 
-            user-select: none; 
-        }
-        
-        #achtergrond-wrapper {
+<!DOCTYPE html> 
+<html lang="nl"> 
+<head> 
+    <meta charset="UTF-8"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <title>VORTEX OS - Modulaire 4D Architectuur (Fixed UI Overlay)</title> 
+     
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /> 
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script> 
+     
+    <style> 
+        body, html {  
+            margin: 0; padding: 0; height: 100%; 
+            font-family: 'Courier New', Courier, monospace;  
+            background-color: #05070a; color: #ffffff; 
+            overflow: hidden;  
+            user-select: none;  
+        } 
+         
+        #achtergrond-wrapper { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            z-index: 0; transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1); 
+            transform-origin: center center; 
+        } 
+        #achtergrond-kaart { width: 100%; height: 100%; transition: transform 0.5s ease; } 
+         
+        #dashboard-wrapper {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 0; transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1);
-            transform-origin: center center;
-        }
-        #achtergrond-kaart { width: 100%; height: 100%; transition: transform 0.5s ease; }
-        
-        /* VIEWPORTS */
-        .viewport-hoek {
-            position: absolute; width: 40.4%; height: 40.4%;
-            border: 2px solid rgba(31, 111, 235, 0.6);
-            box-shadow: inset 0 0 30px rgba(0,0,0,0.5);
-            background-color: rgba(5, 7, 10, 0.8);
-            z-index: 5000; overflow: hidden; pointer-events: auto; 
-            display: flex; flex-direction: column;
-        }
-        .vp-tl { top: 0; left: 0; border-top: none; border-left: none; border-bottom: 3px solid #1f6feb; border-right: 3px solid #1f6feb; }
-        .vp-tr { top: 0; right: 0; border-top: none; border-right: none; border-bottom: 3px solid #1f6feb; border-left: 3px solid #1f6feb; }
-        .vp-bl { bottom: 0; left: 0; border-bottom: none; border-left: none; border-top: 3px solid #1f6feb; border-right: 3px solid #1f6feb; }
-        .vp-br { bottom: 0; right: 0; border-bottom: none; border-right: none; border-top: 3px solid #1f6feb; border-left: 3px solid #1f6feb; }
-        
-        .vp-label {
-            position: absolute; padding: 4px 8px; background: rgba(31, 111, 235, 0.85);
-            color: white; font-size: 11px; font-weight: bold; z-index: 10000; 
-        }
-        .vp-tl .vp-label { top: 0; left: 0; } .vp-tr .vp-label { top: 0; right: 0; }
-        .vp-bl .vp-label { bottom: 0; left: 0; } .vp-br .vp-label { bottom: 0; right: 0; }
-        
-        .vp-content-wrapper {
-            flex-grow: 1; width: 100%; height: calc(100% - 34px); position: relative;
-            transform-origin: center center; transition: transform 0.3s ease, opacity 0.3s ease;
+            pointer-events: none; 
         }
 
-        .vp-tool-bar {
-            height: 34px; background: rgba(13, 17, 23, 0.95); border-top: 1px solid #30363d;
-            display: flex; align-items: center; padding: 0 10px; gap: 6px; z-index: 10001;
-            overflow-x: auto; white-space: nowrap;
-        }
-        .vp-tool-bar button {
-            background: #21262d; border: 1px solid #30363d; color: #58a6ff; 
-            cursor: pointer; border-radius: 3px; font-weight: bold; padding: 4px 8px;
-            font-family: monospace; font-size: 11px; transition: 0.2s;
-        }
-        .vp-tool-bar button:hover:not(:disabled) { background: #1f6feb; color: white; }
-        .vp-tool-bar button:disabled { cursor: not-allowed; opacity: 0.4; }
-        .vp-tool-bar input[type=range] { width: 50px; accent-color: #1f6feb; }
-        .vp-tool-bar span { color: #8b949e; font-size: 9px; text-transform: uppercase; margin-right: -2px;}
-        
-        .vp-top-controls { position: absolute; top: 10px; right: 10px; z-index: 10001; display: flex; gap: 5px; }
-        .vp-br .vp-top-controls { left: 10px; right: auto;}
-        
-        .btn-mini { background-color: rgba(13, 17, 23, 0.8); color: #58a6ff; border: 1px solid #1f6feb; padding: 4px 8px; font-size: 10px; cursor: pointer; border-radius: 3px; font-family: monospace;}
-        .btn-mini:hover { background-color: #1f6feb; color: white;}
-        input[type="file"] { display: none; }
-        .user-image-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 1; z-index: 10; pointer-events: none; }
-        
-        #hex-container { height: 100%; width: 100%; transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1); transform-origin: center center; position: relative; z-index: 1; }
-        #hex-kaart { height: 100%; width: 100%; background: transparent; transition: transform 0.5s ease; }
-        
-        #bedienings-paneel {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 99999; display: flex; flex-direction: column; gap: 6px;
-            background: rgba(13, 17, 23, 0.95); padding: 12px; border-radius: 8px; border: 1px solid #30363d;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.8); max-height: 90vh; overflow-y: auto; min-width: 280px;
-        }
-        #paneel-header { background: #1f6feb; color: #fff; padding: 6px; text-align: center; font-weight: bold; font-size: 12px; cursor: grab; border-radius: 4px; margin-bottom: 6px; user-select: none; letter-spacing: 1px;}
-        #paneel-header:active { cursor: grabbing; }
-        
-        .paneel-titel { color: #58a6ff; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 2px; border-bottom: 1px solid #30363d; padding-bottom: 3px; margin-top: 10px; }
-        select.kaart-keuze, input[type="color"], input[type="text"] {
-            background-color: #05070a; color: #ff7b72; border: 1px solid #30363d; padding: 6px;
-            font-family: monospace; font-weight: bold; font-size: 11px; border-radius: 4px; outline: none; width: 100%; box-sizing: border-box;
-        }
-        .rotatie-knop { background-color: #238636; color: white; border: 1px solid #2ea043; padding: 6px; font-family: monospace; font-weight: bold; font-size: 11px; border-radius: 4px; cursor: pointer; transition: 0.2s; flex: 1;}
-        .rotatie-knop:hover { background-color: #2ea043; }
-        .rotatie-knop.secundair { background-color: #21262d; border-color: #30363d; color: #c9d1d9;}
-        .rotatie-knop.secundair:hover { background-color: #30363d; }
-        .actie-row { display: flex; gap: 4px; flex-wrap: wrap; }
-        
-        .roterende-groep { position: relative; transition: transform 0.2s linear; transform-origin: 14px 14px; filter: drop-shadow(2px 2px 0px rgba(0,0,0,0.9)); cursor: grab; }
-        .basis-vorm { display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 11px; color: #fff; box-sizing: border-box; border: 2px solid #ffffff; text-shadow: 1px 1px 2px #000; }
-        .vorm-vierkant { width: 28px; height: 28px; }
-        .vorm-rondje { width: 28px; height: 28px; border-radius: 50%; }
-        .vorm-driehoek { width: 30px; height: 30px; clip-path: polygon(50% 0%, 0% 100%, 100% 100%); align-items: flex-end; padding-bottom: 4px; border: none; }
-        .marker-label { position: absolute; top: 36px; left: 14px; transform: translateX(-50%); background-color: rgba(13, 17, 23, 0.95); color: #58a6ff; border: 1px solid #30363d; font-size: 10px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; }
-        .leaflet-popup-content-wrapper { background-color: #0d1117; color: #c9d1d9; border: 1px solid #30363d; }
-        .leaflet-popup-tip { background-color: #0d1117; }
+        /* VIEWPORTS - 50% breedte en 100% hoogte */ 
+        .viewport-hoek { 
+            position: absolute; height: 100%; width: 50%; 
+            z-index: 5000; overflow: hidden; 
+            display: flex; flex-direction: column; 
+        } 
 
-        /* INTERACTIEVE OCR LAAG BINNEN WRAPPER */
-        #ocr-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 15; cursor: crosshair;
+        .vp-tl { top: 0; left: 0; border-right: 2px solid #1f6feb; box-sizing: border-box; background-color: rgba(5, 7, 10, 0.8); pointer-events: none; } 
+        .vp-tr { top: 0; right: 0; border-left: 2px solid #1f6feb; box-sizing: border-box; background-color: rgba(5, 7, 10, 0.8); pointer-events: auto; }
+         
+        .vp-tl .vp-label, .vp-tl .vp-tool-bar, .vp-tl canvas, .vp-tl .astro-popup { pointer-events: auto; }
+        .vp-tr .vp-label, .vp-tr .vp-tool-bar { pointer-events: auto; }
+
+        .vp-label { 
+            position: absolute; padding: 4px 8px; background: rgba(31, 111, 235, 0.85); 
+            color: white; font-size: 11px; font-weight: bold; z-index: 10000; top: 0; 
+        } 
+        .vp-tl .vp-label { left: 0; } 
+        .vp-tr .vp-label { right: 0; } 
+         
+        .vp-content-wrapper { 
+            flex-grow: 1; width: 100%; height: calc(100% - 34px); position: relative; 
+            transform-origin: center center; transition: transform 0.1s ease-out, opacity 0.3s ease; 
+        } 
+
+        .vp-tool-bar { 
+            height: 34px; background: rgba(13, 17, 23, 0.95); border-top: 1px solid #30363d; 
+            display: flex; align-items: center; padding: 0 10px; gap: 6px; z-index: 10001; 
+            overflow-x: auto; white-space: nowrap; 
+        } 
+        .vp-tool-bar button { 
+            background: #21262d; border: 1px solid #30363d; color: #58a6ff;  
+            cursor: pointer; border-radius: 3px; font-weight: bold; padding: 4px 8px; 
+            font-family: monospace; font-size: 11px; transition: 0.2s; 
+        } 
+        .vp-tool-bar button:hover:not(:disabled) { background: #1f6feb; color: white; } 
+        .vp-tool-bar button:disabled { cursor: not-allowed; opacity: 0.4; } 
+        .vp-tool-bar input[type=range] { width: 50px; accent-color: #1f6feb; } 
+        .vp-tool-bar span { color: #8b949e; font-size: 9px; text-transform: uppercase; margin-right: -2px;} 
+         
+        #bedienings-paneel { 
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 99999; display: flex; flex-direction: column; gap: 6px; 
+            background: rgba(13, 17, 23, 0.95); padding: 12px; border-radius: 8px; border: 1px solid #30363d; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.9); max-height: 90vh; overflow-y: auto; min-width: 280px; 
+            pointer-events: auto;
+        } 
+
+        #paneel-header { background: #1f6feb; color: #fff; padding: 6px; text-align: center; font-weight: bold; font-size: 12px; cursor: grab; border-radius: 4px; margin-bottom: 6px; user-select: none; letter-spacing: 1px;} 
+        #paneel-header:active { cursor: grabbing; } 
+         
+        .paneel-titel { color: #58a6ff; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 2px; border-bottom: 1px solid #30363d; padding-bottom: 3px; margin-top: 10px; } 
+        select.kaart-keuze, input[type="color"], input[type="text"] { 
+            background-color: #05070a; color: #ff7b72; border: 1px solid #30363d; padding: 6px; 
+            font-family: monospace; font-weight: bold; font-size: 11px; border-radius: 4px; outline: none; width: 100%; box-sizing: border-box; 
+        } 
+
+        .rotatie-knop { background-color: #238636; color: white; border: 1px solid #2ea043; padding: 6px; font-family: monospace; font-weight: bold; font-size: 11px; border-radius: 4px; cursor: pointer; transition: 0.2s; flex: 1;} 
+        .rotatie-knop:hover { background-color: #2ea043; } 
+        .rotatie-knop.secundair { background-color: #21262d; border-color: #30363d; color: #c9d1d9;} 
+        .rotatie-knop.secundair:hover { background-color: #30363d; } 
+        .actie-row { display: flex; gap: 4px; flex-wrap: wrap; } 
+         
+        .roterende-groep { position: relative; transition: transform 0.2s linear; transform-origin: 14px 14px; filter: drop-shadow(2px 2px 0px rgba(0,0,0,0.9)); cursor: grab; } 
+
+        .basis-vorm { display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 11px; color: #fff; box-sizing: border-box; border: 2px solid #ffffff; text-shadow: 1px 1px 2px #000; } 
+        .vorm-vierkant { width: 28px; height: 28px; } 
+        .vorm-rondje { width: 28px; height: 28px; border-radius: 50%; } 
+        .vorm-driehoek { width: 30px; height: 30px; clip-path: polygon(50% 0%, 0% 100%, 100% 100%); align-items: flex-end; padding-bottom: 4px; border: none; } 
+
+        .marker-label { position: absolute; top: 36px; left: 14px; transform: translateX(-50%); background-color: rgba(13, 17, 23, 0.95); color: #58a6ff; border: 1px solid #30363d; font-size: 10px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; } 
+        .leaflet-popup-content-wrapper { background-color: #0d1117; color: #c9d1d9; border: 1px solid #30363d; } 
+        .leaflet-popup-tip { background-color: #0d1117; } 
+
+        #ocr-overlay { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            z-index: 15; cursor: crosshair; 
+        } 
+        #selection-box { 
+            position: absolute; border: 2px dashed #00f2fe; background: rgba(0, 242, 254, 0.15); 
+            display: none; pointer-events: none; z-index: 16; box-shadow: 0 0 10px rgba(0,0,0,0.5); 
+        } 
+
+        .filter-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .filter-row span { font-size: 10px; color: #c9d1d9; font-family: monospace; width: 35%; }
+        .filter-row input[type=range] { width: 60%; accent-color: #00f2fe; }
+
+        /* ASTROLABIUM OPKLAPVAK (POPUP) */
+        .astro-popup {
+            position: absolute; display: none; width: 180px;
+            background: rgba(13, 17, 23, 0.95); border: 1px solid #00f2fe;
+            box-shadow: 0 4px 15px rgba(0, 242, 254, 0.4);
+            color: #c9d1d9; font-family: monospace; font-size: 11px;
+            z-index: 10005; border-radius: 4px; pointer-events: auto;
         }
-        #selection-box {
-            position: absolute; border: 2px dashed #00f2fe; background: rgba(0, 242, 254, 0.15);
-            display: none; pointer-events: none; z-index: 16; box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        .astro-popup-header {
+            background: rgba(0, 242, 254, 0.2); padding: 6px 8px; border-bottom: 1px solid #00f2fe;
+            display: flex; justify-content: space-between; font-weight: bold; color: #00f2fe;
         }
-    </style>
-</head>
-<body>
-    <div id="achtergrond-wrapper"><div id="achtergrond-kaart"></div></div>
-    
-    <div id="dashboard-wrapper">
-        
-        <!-- VP-1: ASTROLABIUM -->
-        <div id="vp-tl" class="viewport-hoek vp-tl">
-            <div class="vp-label">VP-1: ASTROLABIUM</div>
-            <div class="vp-content-wrapper" id="content-vp-tl">
-                <canvas id="astro-canvas" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 15;"></canvas>
-            </div>
-            <div class="vp-tool-bar">
-                <span>BG</span><input type="range" min="0" max="1" step="0.05" value="0.8" oninput="vpSys.setBgAlpha('vp-tl', this.value)">
-                <span>Item</span><input type="range" min="0" max="1" step="0.05" value="1" oninput="vpSys.setAlpha('vp-tl', this.value)">
-                <button onclick="vpSys.zoom('vp-tl', 0.1)">+</button><button onclick="vpSys.zoom('vp-tl', -0.1)">-</button>
-                <button onclick="vpSys.rotate('vp-tl', 15)">↻</button>
-                <button onclick="vpSys.flip('vp-tl', 'x')">↔</button><button onclick="vpSys.flip('vp-tl', 'y')">↕</button>
-                <button onclick="vpSys.reset('vp-tl')" style="margin-left:auto; border-color:#8b0000; color:#ff7b72;">RST</button>
-            </div>
-        </div>
-        
-        <!-- VP-2: DYNAMISCHE SCANNER MET VASTE UI OVERLAYS -->
-        <div id="vp-tr" class="viewport-hoek vp-tr">
-            <div class="vp-label">VP-2: OCR SCANNER (SLEEP & SELECTEER)</div>
+        .astro-popup-header button {
+            background: none; border: none; color: #ff7b72; cursor: pointer; font-size: 12px; font-weight: bold; padding: 0; line-height: 1; transition: 0.2s;
+        }
+        .astro-popup-header button:hover { color: #ff0000; }
+        .astro-popup-content { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+        .astro-popup-content b { color: #58a6ff; display: inline-block; width: 65px; }
+
+        /* DYNAMISCHE KAART INTERACTIE KLASSE */
+        body.kaart-interactie-aan .vp-tr, 
+        body.kaart-interactie-aan .vp-tl,
+        body.kaart-interactie-aan .vp-content-wrapper,
+        body.kaart-interactie-aan #ocr-overlay,
+        body.kaart-interactie-aan #astro-canvas {
+            pointer-events: none !important;
+        }
+        body.kaart-interactie-aan .vp-tool-bar,
+        body.kaart-interactie-aan .vp-label,
+        body.kaart-interactie-aan #webrtc-telemetrie,
+        body.kaart-interactie-aan #bedienings-paneel,
+        body.kaart-interactie-aan .astro-popup {
+            pointer-events: auto !important;
+        }
+    </style> 
+</head> 
+<body> 
+    <div id="achtergrond-wrapper"><div id="achtergrond-kaart"></div></div> 
+     
+    <div id="dashboard-wrapper"> 
+         
+        <div id="vp-tl" class="viewport-hoek vp-tl"> 
+            <div class="vp-label">VP-1: ASTROLABIUM (GEKALIBREERD)</div> 
+            <div class="vp-content-wrapper" id="content-vp-tl"> 
+                <canvas id="astro-canvas" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 15; mix-blend-mode: screen;"></canvas> 
+            </div> 
             
-            <!-- Dit deel schaalt mee met de zoom controls -->
-            <div class="vp-content-wrapper" id="content-vp-tr" style="overflow: hidden;">
-                <video id="ocr-video" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; z-index: 10; filter: contrast(1.1) brightness(1.1);"></video>
-                <div id="ocr-overlay">
-                    <div id="selection-box"></div>
+            <div id="astro-popup" class="astro-popup">
+                <div class="astro-popup-header">
+                    <span id="ap-title">⌖ OBJECT</span> 
+                    <button onclick="astrolabium.sluitPopup()">✖</button>
+                </div>
+                <div class="astro-popup-content">
+                    <div><b>Type:</b> <span id="ap-type"></span></div>
+                    <div><b>RA:</b> <span id="ap-ra"></span></div>
+                    <div><b>DEC:</b> <span id="ap-dec"></span></div>
+                    <div><b>Azimuth:</b> <span id="ap-az" style="color:#00f2fe;"></span></div>
+                    <div><b>Hoek:</b> <span id="ap-alt" style="color:#00f2fe;"></span></div>
                 </div>
             </div>
 
-            <!-- VASTE UI OVERLAYS (Buiten de wrapper, ongevoelig voor zoom/rotate) -->
-            <canvas id="ocr-preview" style="position: absolute; top: 25px; right: 10px; width: 180px; height: auto; border: 2px solid #00f2fe; z-index: 30; display: none; background: #fff; box-shadow: 0 0 15px rgba(0, 242, 254, 0.5); pointer-events: none;"></canvas>
+            <div class="vp-tool-bar"> 
+                <span>BG</span><input type="range" min="0" max="1" step="0.05" value="0.8" oninput="vpSys.setBgAlpha('vp-tl', this.value)"> 
+                <span>Item</span><input type="range" min="0" max="1" step="0.05" value="1" oninput="vpSys.setAlpha('vp-tl', this.value)"> 
+                <button onclick="vpSys.zoom('vp-tl', 0.1)">+</button><button onclick="vpSys.zoom('vp-tl', -0.1)">-</button> 
+                <button onclick="vpSys.rotate('vp-tl', 15)">↻ 15°</button> 
+                <button onclick="vpSys.flip('vp-tl', 'x')">↔</button><button onclick="vpSys.flip('vp-tl', 'y')">↕</button> 
+                <button onclick="vpSys.reset('vp-tl')" style="margin-left:auto; border-color:#8b0000; color:#ff7b72;">RST</button> 
+            </div> 
+        </div> 
+         
+        <div id="vp-tr" class="viewport-hoek vp-tr"> 
+            <div class="vp-label">VP-2: OCR SCANNER (SLEEP & SELECTEER | SCROLL OM TE ZOOMEN)</div> 
+             
+            <div class="vp-content-wrapper" id="content-vp-tr" style="overflow: hidden;"> 
+                <video id="ocr-video" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; z-index: 10; filter: contrast(1.8) brightness(0.9) grayscale(1) invert(0) saturate(1) sepia(0);"></video> 
+                <div id="ocr-overlay"> 
+                    <div id="selection-box"></div> 
+                </div> 
+            </div> 
 
-            <div id="webrtc-telemetrie" style="position: absolute; bottom: 34px; left: 0; right: 0; z-index: 20; color: #58a6ff; font-family: monospace; font-size: 11px; background: rgba(5,7,10,0.85); padding: 8px; border-top: 1px solid #1f6feb; max-height: calc(50% - 34px); overflow-y: auto; pointer-events: auto;">
-                SYS_SCAN: WACHT OP INITIALISATIE...
+            <canvas id="ocr-preview" style="position: absolute; top: 25px; right: 10px; width: 180px; height: auto; border: 2px solid #00f2fe; z-index: 30; display: none; background: #fff; box-shadow: 0 0 15px rgba(0, 242, 254, 0.5); pointer-events: none;"></canvas> 
+
+            <div id="webrtc-telemetrie" style="position: absolute; bottom: 34px; left: 0; right: 0; z-index: 20; color: #58a6ff; font-family: monospace; font-size: 11px; background: rgba(5,7,10,0.85); padding: 8px; border-top: 1px solid #1f6feb; max-height: calc(50% - 34px); overflow-y: auto; pointer-events: auto;"> 
+                SYS_SCAN: WACHT OP INITIALISATIE... 
+            </div> 
+
+            <div class="vp-tool-bar"> 
+                <button id="btn-pan-mode" onclick="ocrSystem.togglePanMode()" style="background-color: #d35400; border-color: #e67e22; color: white;">✂️ Scan Modus</button>
+                <button id="btn-copy-ocr" onclick="ocrSystem.kopieerTekst()" style="background-color: #2ea043; border-color: #238636; color: white;">📋</button> 
+                <button id="btn-clear-ocr" onclick="ocrSystem.wisTekst()" style="background-color: #8b0000; border-color: #ff0000; color: white;">🗑</button> 
+                <button id="btn-hw-mode" onclick="ocrSystem.toggleHandwriting()" style="background-color: #0f3460; border-color: #1f6feb; color: white;">✍️ HS: UIT</button> 
+                <span title="Drempelwaarde voor Inkt-herkenning">Inkt</span><input type="range" id="hw-threshold" min="30" max="220" value="130" oninput="ocrSystem.updateThreshold(this.value)"> 
+                <span>BG</span><input type="range" min="0" max="1" step="0.05" value="0.8" oninput="vpSys.setBgAlpha('vp-tr', this.value)"> 
+                <button onclick="vpSys.zoom('vp-tr', 0.1)">+</button><button onclick="vpSys.zoom('vp-tr', -0.1)">-</button> 
+                <button onclick="vpSys.reset('vp-tr')" style="margin-left:auto; border-color:#8b0000; color:#ff7b72;">RST</button> 
+            </div> 
+        </div> 
+
+        <div id="bedienings-paneel"> 
+            <div id="paneel-header">✥ VORTEX SYSTEEM KERN</div> 
+             
+            <div class="paneel-titel" style="margin-top:0;">1. Hoofdkaart & Navigatie</div> 
+            <select id="achtergrond-kies-menu" class="kaart-keuze" onchange="wisselAchtergrond()" style="margin-bottom:4px;"> 
+                <option value="zeekaart" selected>Zeekaarten (OpenSeaMap)</option> 
+                <option value="carto">Carto Dark Matter</option> 
+                <option value="osm">OpenStreetMap</option> 
+                <option value="esri">Esri Satelliet</option> 
+                <option value="topo">OpenTopoMap</option> 
+            </select> 
+             
+            <div class="actie-row"> 
+                <button class="rotatie-knop secundair" onclick="zoomAchtergrond('in')">🔍 In</button> 
+                <button class="rotatie-knop secundair" onclick="zoomAchtergrond('uit')">🌍 Uit</button> 
+            </div> 
+            <div class="actie-row" style="margin-top: 4px;">
+                <button class="rotatie-knop" id="btn-kaart-interactie" onclick="toggleKaartInteractie()" style="background-color: #0969da; border-color: #1f6feb; width: 100%;">🗺️ Verschuif/Zoom Kaart (Ontgrendelen)</button>
             </div>
 
-            <!-- Toolbar -->
-            <div class="vp-tool-bar">
-                <button id="btn-copy-ocr" onclick="ocrSystem.kopieerTekst()" style="background-color: #2ea043; border-color: #238636; color: white;">📋</button>
-                <button id="btn-clear-ocr" onclick="ocrSystem.wisTekst()" style="background-color: #8b0000; border-color: #ff0000; color: white;">🗑</button>
-                <button id="btn-hw-mode" onclick="ocrSystem.toggleHandwriting()" style="background-color: #0f3460; border-color: #1f6feb; color: white;">✍️ HS: UIT</button>
-                <span title="Drempelwaarde voor Inkt-herkenning">Inkt</span><input type="range" id="hw-threshold" min="30" max="220" value="130" oninput="ocrSystem.updateThreshold(this.value)">
-                <span>BG</span><input type="range" min="0" max="1" step="0.05" value="0.8" oninput="vpSys.setBgAlpha('vp-tr', this.value)">
-                <button onclick="vpSys.zoom('vp-tr', 0.1)">+</button><button onclick="vpSys.zoom('vp-tr', -0.1)">-</button>
-                <button onclick="vpSys.reset('vp-tr')" style="margin-left:auto; border-color:#8b0000; color:#ff7b72;">RST</button>
-            </div>
-        </div>
-        
-        <!-- VP-3: HEXAGRAM GRID -->
-        <div id="vp-bl" class="viewport-hoek vp-bl">
-            <div class="vp-label">VP-3: HEX MATRIX</div>
-            <div class="vp-content-wrapper" id="content-vp-bl">
-                <div id="hex-container"><div id="hex-kaart"></div></div>
-            </div>
-            <div class="vp-tool-bar">
-                <span>BG</span><input type="range" min="0" max="1" step="0.05" value="0.8" oninput="vpSys.setBgAlpha('vp-bl', this.value)">
-                <span>Item</span><input type="range" min="0" max="1" step="0.05" value="1" oninput="vpSys.setAlpha('vp-bl', this.value)">
-                <button onclick="vpSys.zoom('vp-bl', 0.1)">+</button><button onclick="vpSys.zoom('vp-bl', -0.1)">-</button>
-                <button onclick="vpSys.rotate('vp-bl', 15)">↻</button>
-                <button onclick="vpSys.flip('vp-bl', 'x')">↔</button><button onclick="vpSys.flip('vp-bl', 'y')">↕</button>
-                <button onclick="vpSys.reset('vp-bl')" style="margin-left:auto; border-color:#8b0000; color:#ff7b72;">RST</button>
-            </div>
-        </div>
-        
-        <!-- VP-4: MEDIA VRIJ -->
-        <div id="vp-br" class="viewport-hoek vp-br">
-            <div class="vp-label">VP-4: MEDIA</div>
-            <div class="vp-top-controls">
-                <button class="btn-mini" onclick="document.getElementById('upload-vp-br').click()">Upload</button>
-                <input type="file" id="upload-vp-br" accept="image/*" onchange="uploadPlaatje(event, 'content-vp-br')">
-                <button class="btn-mini" style="border-color:#8b0000; color:#ff7b72;" onclick="verwijderPlaatje('content-vp-br')">Wis</button>
-            </div>
-            <div class="vp-content-wrapper" id="content-vp-br"></div>
-            <div class="vp-tool-bar">
-                <span>BG</span><input type="range" min="0" max="1" step="0.05" value="0.8" oninput="vpSys.setBgAlpha('vp-br', this.value)">
-                <span>Item</span><input type="range" min="0" max="1" step="0.05" value="1" oninput="vpSys.setAlpha('vp-br', this.value)">
-                <button onclick="vpSys.zoom('vp-br', 0.1)">+</button><button onclick="vpSys.zoom('vp-br', -0.1)">-</button>
-                <button onclick="vpSys.rotate('vp-br', 15)">↻</button>
-                <button onclick="vpSys.flip('vp-br', 'x')">↔</button><button onclick="vpSys.flip('vp-br', 'y')">↕</button>
-                <button onclick="vpSys.reset('vp-br')" style="margin-left:auto; border-color:#8b0000; color:#ff7b72;">RST</button>
-            </div>
-        </div>
+            <div class="paneel-titel">2. Globale Matrix Rotatie</div> 
+            <div class="actie-row"> 
+                <button class="rotatie-knop secundair" onclick="draaiAchtergrond(91)">91°</button> 
+                <button class="rotatie-knop secundair" onclick="draaiAchtergrond(181)">181°</button> 
+                <button class="rotatie-knop secundair" onclick="draaiAchtergrond(234)">234°</button> 
+                <button class="rotatie-knop secundair" onclick="stapAchtergrond(15)">+15°</button> 
+                <button class="rotatie-knop secundair" style="background-color: #8b0000; color:white; border-color:#ff0000;" onclick="draaiAchtergrond(0)">Reset</button> 
+            </div> 
 
-        <!-- BEDIENINGSPANEEL -->
-        <div id="bedienings-paneel">
-            <div id="paneel-header">✥ VORTEX SYSTEEM KERN</div>
+            <div class="paneel-titel">3. Ruimtelijke Ankers</div> 
+            <input type="text" id="anker-naam" placeholder="Naam Ankerpunt..." style="margin-bottom: 4px;"> 
+            <input type="text" id="anker-zoek" placeholder="Plaatsnaam of Lat, Lng..." style="margin-bottom: 4px;"> 
+            <div class="actie-row" style="margin-bottom: 4px;"><button class="rotatie-knop secundair" style="width:100%;" onclick="zoekAnkerLocatie(event)">📍 Zoek & Zoom</button></div> 
+            <input type="color" id="marker-kleur" value="#1f6feb" title="Kies Maker Kleur"> 
+            <div class="actie-row" style="margin-top:4px;"> 
+                <button class="rotatie-knop" onclick="plaatsAnker('vierkant', event)">Vierkant</button> 
+                <button class="rotatie-knop" onclick="plaatsAnker('driehoek', event)">Driehoek</button> 
+                <button class="rotatie-knop" onclick="plaatsAnker('rondje', event)">Rondje</button> 
+            </div> 
+
+            <div class="paneel-titel" style="color: #00f2fe; border-color: #00f2fe;">4. Locatie & Astrolabium</div>
+            <input type="text" id="astro-locatie" value="De Meent 27, Laren" placeholder="Woonplaats/Adres" style="margin-bottom: 4px;">
+            <div style="display:flex; gap:4px; margin-bottom: 4px;">
+                <input type="text" id="astro-lat" value="52.256" title="Latitude (Noorderbreedte)" readonly style="color: #8b949e; background: #0d1117;">
+                <input type="text" id="astro-lon" value="5.226" title="Longitude (Oosterlengte)" readonly style="color: #8b949e; background: #0d1117;">
+            </div>
+            <div class="actie-row">
+                <button class="rotatie-knop" style="background-color: #0969da; border-color: #1f6feb;" onclick="updateAstroLocatie(event)">Update Data</button>
+                <button class="rotatie-knop secundair" onclick="vpSys.rotate('vp-tl', 1)">+1° Draai</button>
+            </div>
+
+            <div class="paneel-titel" style="color: #00f2fe; border-color: #00f2fe;">5. VP-2 Beeldfilters (Tekst OCR)</div>
+            <div class="filter-row">
+                <span>Contrast</span>
+                <input type="range" id="flt-contrast" min="0.5" max="3" step="0.1" value="1.8" oninput="updateLiveFilters()">
+            </div>
+            <div class="filter-row">
+                <span>Helderheid</span>
+                <input type="range" id="flt-bright" min="0.2" max="2" step="0.1" value="0.9" oninput="updateLiveFilters()">
+            </div>
+            <div class="filter-row">
+                <span>Saturatie</span>
+                <input type="range" id="flt-saturate" min="0" max="3" step="0.1" value="1" oninput="updateLiveFilters()">
+            </div>
+            <div class="filter-row">
+                <span>Sepia</span>
+                <input type="range" id="flt-sepia" min="0" max="1" step="0.1" value="0" oninput="updateLiveFilters()">
+            </div>
+            <div class="filter-row">
+                <span>Grijswaarden</span>
+                <input type="range" id="flt-gray" min="0" max="1" step="0.1" value="1" oninput="updateLiveFilters()">
+            </div>
+            <div class="filter-row">
+                <span>Inverteren</span>
+                <input type="range" id="flt-invert" min="0" max="1" step="1" value="0" oninput="updateLiveFilters()">
+            </div>
+            <button class="rotatie-knop secundair" style="width:100%; border-color:#8b0000; color:#ff7b72; margin-top:4px;" onclick="resetLiveFilters()">Reset Filters</button>
+
+        </div> 
+    </div> 
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script> 
+     
+    <script> 
+        // ========================================== 
+        // KAART NAVIGATIE TOGGLE (Nieuw)
+        // ========================================== 
+        function toggleKaartInteractie() {
+            let body = document.body;
+            let btn = document.getElementById('btn-kaart-interactie');
             
-            <div class="paneel-titel" style="margin-top:0;">1. Hoofdkaart & Navigatie</div>
-            <select id="achtergrond-kies-menu" class="kaart-keuze" onchange="wisselAchtergrond()" style="margin-bottom:4px;">
-                <option value="zeekaart" selected>Zeekaarten (OpenSeaMap)</option>
-                <option value="carto">Carto Dark Matter</option>
-                <option value="osm">OpenStreetMap</option>
-                <option value="esri">Esri Satelliet</option>
-                <option value="topo">OpenTopoMap</option>
-            </select>
-            
-            <div class="actie-row">
-                <button class="rotatie-knop secundair" onclick="zoomAchtergrond('in')">🔍 In</button>
-                <button class="rotatie-knop secundair" onclick="zoomAchtergrond('uit')">🌍 Uit</button>
-            </div>
-
-            <div class="paneel-titel">2. Globale Matrix Rotatie</div>
-            <div class="actie-row">
-                <button class="rotatie-knop secundair" onclick="draaiAchtergrond(91)">91°</button>
-                <button class="rotatie-knop secundair" onclick="draaiAchtergrond(181)">181°</button>
-                <button class="rotatie-knop secundair" onclick="draaiAchtergrond(234)">234°</button>
-                <button class="rotatie-knop secundair" onclick="stapAchtergrond(15)">+15°</button>
-                <button class="rotatie-knop secundair" style="background-color: #8b0000; color:white; border-color:#ff0000;" onclick="draaiAchtergrond(0)">Reset</button>
-            </div>
-
-            <div class="paneel-titel" style="color: #ff7b72; border-color: #ff7b72;">3. LFSR Cyclus (137.5°)</div>
-            <div class="actie-row">
-                <button class="rotatie-knop" style="background-color: #8e44ad; border-color:#9b59b6;" onclick="activeerLFSRCyclus()">⟳ Pulse</button>
-                <button class="rotatie-knop" id="btn-auto-lfsr" style="background-color: #d35400; border-color:#e67e22;" onclick="toggleAutoLFSR()">▶ Auto Loop</button>
-                <button class="rotatie-knop" style="background-color: #8b0000; border-color:#ff0000;" onclick="draaiKaart(0)">Reset</button>
-            </div>
-
-            <div class="paneel-titel">4. Ruimtelijke Ankers</div>
-            <input type="text" id="anker-naam" placeholder="Naam Ankerpunt..." style="margin-bottom: 4px;">
-            <input type="text" id="anker-zoek" placeholder="Plaatsnaam of Lat, Lng..." style="margin-bottom: 4px;">
-            <div class="actie-row" style="margin-bottom: 4px;"><button class="rotatie-knop secundair" style="width:100%;" onclick="zoekAnkerLocatie()">📍 Zoek & Zoom</button></div>
-            <input type="color" id="marker-kleur" value="#1f6feb" title="Kies Maker Kleur">
-            <div class="actie-row" style="margin-top:4px;">
-                <button class="rotatie-knop" onclick="plaatsAnker('vierkant')">Vierkant</button>
-                <button class="rotatie-knop" onclick="plaatsAnker('driehoek')">Driehoek</button>
-                <button class="rotatie-knop" onclick="plaatsAnker('rondje')">Rondje</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <script>
-        // ==========================================
-        // 1. INDIVIDUELE VIEWPORT CONTROLS 
-        // ==========================================
-        const vpSys = {
-            state: {
-                'vp-tl': { zoom: 1, rot: 0, flipX: 1, flipY: 1, alpha: 1, bgAlpha: 0.8 },
-                'vp-tr': { zoom: 1, rot: 0, flipX: 1, flipY: 1, alpha: 1, bgAlpha: 0.8 },
-                'vp-bl': { zoom: 1, rot: 0, flipX: 1, flipY: 1, alpha: 1, bgAlpha: 0.8 },
-                'vp-br': { zoom: 1, rot: 0, flipX: 1, flipY: 1, alpha: 1, bgAlpha: 0.8 }
-            },
-            update: function(id) {
-                const s = this.state[id];
-                const content = document.getElementById('content-' + id);
-                const container = document.getElementById(id);
-                if(content) {
-                    content.style.transform = `scale(${s.zoom * s.flipX}, ${s.zoom * s.flipY}) rotate(${s.rot}deg)`;
-                    content.style.opacity = s.alpha;
-                }
-                if(container) {
-                    container.style.backgroundColor = `rgba(5, 7, 10, ${s.bgAlpha})`;
-                }
-            },
-            zoom: function(id, val) { this.state[id].zoom = Math.max(0.1, this.state[id].zoom + val); this.update(id); },
-            rotate: function(id, deg) { this.state[id].rot = (this.state[id].rot + deg) % 360; this.update(id); },
-            flip: function(id, axis) { 
-                if(axis === 'x') this.state[id].flipX *= -1; 
-                if(axis === 'y') this.state[id].flipY *= -1; 
-                this.update(id); 
-            },
-            setAlpha: function(id, val) { this.state[id].alpha = parseFloat(val); this.update(id); },
-            setBgAlpha: function(id, val) { this.state[id].bgAlpha = parseFloat(val); this.update(id); },
-            reset: function(id) { 
-                this.state[id] = { zoom: 1, rot: 0, flipX: 1, flipY: 1, alpha: 1, bgAlpha: 0.8 };
-                let ranges = document.querySelectorAll(`#${id} .vp-tool-bar input[type=range]`);
-                if(ranges[0]) ranges[0].value = 0.8; 
-                if(ranges[1]) ranges[1].value = 1;   
-                this.update(id); 
+            if (body.classList.contains('kaart-interactie-aan')) {
+                body.classList.remove('kaart-interactie-aan');
+                btn.style.backgroundColor = "#0969da";
+                btn.style.borderColor = "#1f6feb";
+                btn.innerHTML = "🗺️ Verschuif/Zoom Kaart (Ontgrendelen)";
+            } else {
+                body.classList.add('kaart-interactie-aan');
+                btn.style.backgroundColor = "#d35400";
+                btn.style.borderColor = "#e67e22";
+                btn.innerHTML = "🔒 Kaart Vergrendelen (UI Actief)";
             }
-        };
+        }
 
-        // ==========================================
-        // 2. OCR SCANNER (FIXED UI & KERNEL ALGORITME)
-        // ==========================================
-        const ocrSystem = {
-            video: null, canvas: null, ctx: null,
-            isProcessing: false, lastDetectedText: "", worker: null,
-            isHandwritingMode: false,
-            threshold: 130,
+        // ========================================== 
+        // 1. INDIVIDUELE VIEWPORT CONTROLS  
+        // ========================================== 
+        const vpSys = { 
+            state: { 
+                'vp-tl': { zoom: 1, rot: 0, flipX: 1, flipY: 1, alpha: 1, bgAlpha: 0.8, panX: 0, panY: 0 }, 
+                'vp-tr': { zoom: 1, rot: 0, flipX: 1, flipY: 1, alpha: 1, bgAlpha: 0.8, panX: 0, panY: 0 } 
+            }, 
+            update: function(id) { 
+                const s = this.state[id]; 
+                const content = document.getElementById('content-' + id); 
+                const container = document.getElementById(id); 
+                if(content) { 
+                    content.style.transform = `translate(${s.panX}px, ${s.panY}px) scale(${s.zoom * s.flipX}, ${s.zoom * s.flipY}) rotate(${s.rot}deg)`; 
+                    content.style.opacity = s.alpha; 
+                } 
+                if(container) { 
+                    container.style.backgroundColor = `rgba(5, 7, 10, ${s.bgAlpha})`; 
+                } 
+            }, 
+            zoom: function(id, val) { this.state[id].zoom = Math.max(0.1, this.state[id].zoom + val); this.update(id); }, 
+            rotate: function(id, deg) { this.state[id].rot = (this.state[id].rot + deg) % 360; this.update(id); }, 
+            flip: function(id, axis) {  
+                if(axis === 'x') this.state[id].flipX *= -1;  
+                if(axis === 'y') this.state[id].flipY *= -1;  
+                this.update(id);  
+            }, 
+            setAlpha: function(id, val) { this.state[id].alpha = parseFloat(val); this.update(id); }, 
+            setBgAlpha: function(id, val) { this.state[id].bgAlpha = parseFloat(val); this.update(id); }, 
+            reset: function(id) {  
+                this.state[id] = { zoom: 1, rot: 0, flipX: 1, flipY: 1, alpha: 1, bgAlpha: 0.8, panX: 0, panY: 0 }; 
+                let ranges = document.querySelectorAll(`#${id} .vp-tool-bar input[type=range]`); 
+                if(ranges[0]) ranges[0].value = 0.8;  
+                if(ranges[1]) ranges[1].value = 1;    
+                this.update(id);  
+            } 
+        }; 
+
+        document.getElementById('vp-tr').addEventListener('wheel', function(e) {
+            if (document.body.classList.contains('kaart-interactie-aan')) return; // laat de scroll door naar de kaart
+            e.preventDefault(); 
+            if(e.deltaY < 0) { vpSys.zoom('vp-tr', 0.1); } 
+            else { vpSys.zoom('vp-tr', -0.1); }
+        }, { passive: false });
+
+        // ========================================== 
+        // 2. LIVE VIDEO FILTERS (Sectie 5)
+        // ========================================== 
+        function updateLiveFilters() {
+            let contrast = document.getElementById('flt-contrast').value;
+            let bright = document.getElementById('flt-bright').value;
+            let gray = document.getElementById('flt-gray').value;
+            let invert = document.getElementById('flt-invert').value;
+            let saturate = document.getElementById('flt-saturate').value;
+            let sepia = document.getElementById('flt-sepia').value;
             
-            overlay: null, selBox: null, isSelecting: false,
-            sX: 0, sY: 0, eX: 0, eY: 0,
+            let video = document.getElementById('ocr-video');
+            video.style.filter = `contrast(${contrast}) brightness(${bright}) grayscale(${gray}) invert(${invert}) saturate(${saturate}) sepia(${sepia})`;
+        }
 
-            init: async function() {
-                this.video = document.getElementById('ocr-video');
-                this.canvas = document.createElement('canvas'); 
-                this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
-                
-                this.overlay = document.getElementById('ocr-overlay');
-                this.selBox = document.getElementById('selection-box');
-                const telemetrie = document.getElementById('webrtc-telemetrie');
+        function resetLiveFilters() {
+            document.getElementById('flt-contrast').value = 1.8;
+            document.getElementById('flt-bright').value = 0.9;
+            document.getElementById('flt-gray').value = 1;
+            document.getElementById('flt-invert').value = 0;
+            document.getElementById('flt-saturate').value = 1;
+            document.getElementById('flt-sepia').value = 0;
+            updateLiveFilters();
+        }
 
-                this.boundMouseMove = this.onMouseMove.bind(this);
-                this.boundMouseUp = this.onMouseUp.bind(this);
-                
-                this.overlay.addEventListener('mousedown', (e) => this.onMouseDown(e));
-                this.overlay.addEventListener('touchstart', (e) => this.onMouseDown(e.touches[0]));
+        // ========================================== 
+        // 3. OCR SCANNER & PAN LOGICA
+        // ========================================== 
+        const ocrSystem = { 
+            video: null, canvas: null, ctx: null, 
+            isProcessing: false, lastDetectedText: "", worker: null, 
+            isHandwritingMode: false, threshold: 130, 
+            overlay: null, selBox: null, isSelecting: false, 
+            sX: 0, sY: 0, eX: 0, eY: 0, 
 
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
-                    });
-                    this.video.srcObject = stream;
-                    telemetrie.innerHTML = "SYS_SCAN: CAMERA ACTIEF. ENGINE LADEN...<br>";
-                } catch (error) {
-                    telemetrie.innerHTML = "SYS_ERR: CAMERA GEWEIGERD. Controleer server/https.";
-                    return;
-                }
+            mode: 'scan', 
+            isPanning: false, panStartX: 0, panStartY: 0,
 
-                try {
-                    this.worker = await Tesseract.createWorker('nld+eng', 1, {
-                        logger: m => { 
-                            if(m.status === 'recognizing text') {
-                                telemetrie.innerHTML = `SYS_SCAN: <i>Analyseren... ${Math.round(m.progress * 100)}%</i>`; 
-                            } else {
-                                telemetrie.innerHTML = `SYS_SCAN: <i>${m.status}... ${Math.round(m.progress * 100)}%</i>`; 
-                            }
-                        }
-                    });
-                    telemetrie.innerHTML = "SYS_SCAN: KLAAR. <b>SLEEP EEN VAKJE OVER DE TEKST.</b><br>";
-                } catch (e) {
-                    telemetrie.innerHTML = "SYS_ERR: OCR ENGINE KON NIET LADEN.";
-                }
-            },
+            init: async function() { 
+                this.video = document.getElementById('ocr-video'); 
+                this.canvas = document.createElement('canvas');  
+                this.ctx = this.canvas.getContext('2d', { willReadFrequently: true }); 
+                 
+                this.overlay = document.getElementById('ocr-overlay'); 
+                this.selBox = document.getElementById('selection-box'); 
+                const telemetrie = document.getElementById('webrtc-telemetrie'); 
 
-            toggleHandwriting: function() {
-                this.isHandwritingMode = !this.isHandwritingMode;
-                const btn = document.getElementById('btn-hw-mode');
-                const telemetrie = document.getElementById('webrtc-telemetrie');
-                if(this.isHandwritingMode) {
-                    btn.innerHTML = "✍️ HS: AAN";
-                    btn.style.backgroundColor = "#e94560";
-                    telemetrie.innerHTML = "SYS_SCAN: Binarisatie geactiveerd. Pas eventueel de Inkt-slider aan.<br>";
+                this.boundMouseMove = this.onMouseMove.bind(this); 
+                this.boundMouseUp = this.onMouseUp.bind(this); 
+                 
+                this.overlay.addEventListener('mousedown', (e) => this.onMouseDown(e)); 
+                this.overlay.addEventListener('touchstart', (e) => this.onMouseDown(e.touches[0])); 
+
+                try { 
+                    const stream = await navigator.mediaDevices.getUserMedia({  
+                        video: { 
+                            facingMode: "environment", 
+                            width: { ideal: 3840, min: 1920 }, 
+                            height: { ideal: 2160, min: 1080 },
+                            advanced: [{ focusMode: "continuous" }] 
+                        }  
+                    }); 
+                    this.video.srcObject = stream; 
+                    telemetrie.innerHTML = "SYS_SCAN: CAMERA ACTIEF (HIGH-RES). ENGINE LADEN...<br>"; 
+                } catch (error) { 
+                    telemetrie.innerHTML = "SYS_ERR: CAMERA GEWEIGERD. Controleer server/https."; 
+                    return; 
+                } 
+
+                try { 
+                    this.worker = await Tesseract.createWorker('nld+eng', 1, { 
+                        logger: m => {  
+                            if(m.status === 'recognizing text') { telemetrie.innerHTML = `SYS_SCAN: <i>Analyseren... ${Math.round(m.progress * 100)}%</i>`; } 
+                            else { telemetrie.innerHTML = `SYS_SCAN: <i>${m.status}... ${Math.round(m.progress * 100)}%</i>`; } 
+                        } 
+                    }); 
+                    telemetrie.innerHTML = "SYS_SCAN: KLAAR. <b>SLEEP EEN VAKJE OVER DE TEKST.</b><br>"; 
+                } catch (e) { 
+                    telemetrie.innerHTML = "SYS_ERR: OCR ENGINE KON NIET LADEN."; 
+                } 
+            }, 
+
+            togglePanMode: function() {
+                if (this.mode === 'scan') {
+                    this.mode = 'pan';
+                    document.getElementById('btn-pan-mode').innerHTML = "✋ Pan Modus";
+                    document.getElementById('btn-pan-mode').style.backgroundColor = "#27ae60";
+                    document.getElementById('btn-pan-mode').style.borderColor = "#2ecc71";
+                    this.overlay.style.cursor = 'grab';
                 } else {
-                    btn.innerHTML = "✍️ HS: UIT";
-                    btn.style.backgroundColor = "#0f3460";
-                    telemetrie.innerHTML = "SYS_SCAN: Standaard boeken/print filters hersteld.<br>";
+                    this.mode = 'scan';
+                    document.getElementById('btn-pan-mode').innerHTML = "✂️ Scan Modus";
+                    document.getElementById('btn-pan-mode').style.backgroundColor = "#d35400";
+                    document.getElementById('btn-pan-mode').style.borderColor = "#e67e22";
+                    this.overlay.style.cursor = 'crosshair';
                 }
             },
 
-            updateThreshold: function(val) {
-                this.threshold = parseInt(val);
-                const telemetrie = document.getElementById('webrtc-telemetrie');
-                telemetrie.innerHTML = `SYS_SCAN: Inkt-drempel gewijzigd naar ${this.threshold}. Maak een nieuwe selectie.<br>`;
-            },
+            toggleHandwriting: function() { 
+                this.isHandwritingMode = !this.isHandwritingMode; 
+                const btn = document.getElementById('btn-hw-mode'); 
+                const telemetrie = document.getElementById('webrtc-telemetrie'); 
+                if(this.isHandwritingMode) { 
+                    btn.innerHTML = "✍️ HS: AAN"; btn.style.backgroundColor = "#e94560"; 
+                    telemetrie.innerHTML = "SYS_SCAN: Binarisatie geactiveerd.<br>"; 
+                } else { 
+                    btn.innerHTML = "✍️ HS: UIT"; btn.style.backgroundColor = "#0f3460"; 
+                    telemetrie.innerHTML = "SYS_SCAN: Standaard filters hersteld.<br>"; 
+                } 
+            }, 
 
-            getMousePos: function(e) {
-                const rect = this.overlay.getBoundingClientRect();
+            updateThreshold: function(val) { 
+                this.threshold = parseInt(val); 
+                const telemetrie = document.getElementById('webrtc-telemetrie'); 
+                telemetrie.innerHTML = `SYS_SCAN: Inkt-drempel gewijzigd naar ${this.threshold}.<br>`; 
+            }, 
+
+            getMousePos: function(e) { 
+                const rect = this.overlay.getBoundingClientRect(); 
+                let clientX = e.touches ? e.touches[0].clientX : e.clientX; 
+                let clientY = e.touches ? e.touches[0].clientY : e.clientY; 
+                let state = vpSys.state['vp-tr']; let zoom = state.zoom; 
+                let rawX = clientX - rect.left; let rawY = clientY - rect.top; 
+                let x = rawX / zoom; let y = rawY / zoom; 
+                if (state.flipX === -1) x = (rect.width / zoom) - x; 
+                if (state.flipY === -1) y = (rect.height / zoom) - y; 
+                return { x: x, y: y }; 
+            }, 
+
+            onMouseDown: function(e) { 
+                if (!this.worker || this.isProcessing) return;  
+
                 let clientX = e.touches ? e.touches[0].clientX : e.clientX;
                 let clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                
-                let state = vpSys.state['vp-tr'];
-                let zoom = state.zoom;
-                
-                let rawX = clientX - rect.left;
-                let rawY = clientY - rect.top;
-                
-                let x = rawX / zoom;
-                let y = rawY / zoom;
-                
-                if (state.flipX === -1) x = (rect.width / zoom) - x;
-                if (state.flipY === -1) y = (rect.height / zoom) - y;
-                
-                return { x: x, y: y };
-            },
 
-            onMouseDown: function(e) {
-                if (!this.worker || this.isProcessing) return; 
-                this.isSelecting = true;
-                
-                let pos = this.getMousePos(e);
-                this.sX = pos.x;
-                this.sY = pos.y;
-                
-                this.selBox.style.left = this.sX + 'px';
-                this.selBox.style.top = this.sY + 'px';
-                this.selBox.style.width = '0px';
-                this.selBox.style.height = '0px';
-                this.selBox.style.display = 'block';
-
-                document.addEventListener('mousemove', this.boundMouseMove);
-                document.addEventListener('mouseup', this.boundMouseUp);
-                document.addEventListener('touchmove', this.boundMouseMove);
-                document.addEventListener('touchend', this.boundMouseUp);
-            },
-
-            onMouseMove: function(e) {
-                if (!this.isSelecting) return;
-                
-                let pos = this.getMousePos(e);
-                this.eX = pos.x;
-                this.eY = pos.y;
-                
-                const domW = this.overlay.clientWidth;
-                const domH = this.overlay.clientHeight;
-                
-                this.eX = Math.max(0, Math.min(this.eX, domW));
-                this.eY = Math.max(0, Math.min(this.eY, domH));
-                
-                const left = Math.min(this.sX, this.eX);
-                const top = Math.min(this.sY, this.eY);
-                const width = Math.abs(this.eX - this.sX);
-                const height = Math.abs(this.eY - this.sY);
-                
-                this.selBox.style.left = left + 'px';
-                this.selBox.style.top = top + 'px';
-                this.selBox.style.width = width + 'px';
-                this.selBox.style.height = height + 'px';
-            },
-
-            onMouseUp: function(e) {
-                if(!this.isSelecting) return;
-                this.isSelecting = false;
-                
-                document.removeEventListener('mousemove', this.boundMouseMove);
-                document.removeEventListener('mouseup', this.boundMouseUp);
-                document.removeEventListener('touchmove', this.boundMouseMove);
-                document.removeEventListener('touchend', this.boundMouseUp);
-
-                this.voerSelectieScanUit();
-            },
-
-            verscherpBeeld: function(ctx, w, h) {
-                let imageData = ctx.getImageData(0, 0, w, h);
-                let src = imageData.data;
-                let dst = new Uint8ClampedArray(src.length);
-                
-                let kernel = [ 
-                    0, -1,  0, 
-                   -1,  5, -1, 
-                    0, -1,  0 
-                ];
-                
-                for (let y = 1; y < h - 1; y++) {
-                    for (let x = 1; x < w - 1; x++) {
-                        let dstOff = (y * w + x) * 4;
-                        let r = 0, g = 0, b = 0;
-                        for (let cy = 0; cy < 3; cy++) {
-                            for (let cx = 0; cx < 3; cx++) {
-                                let srcOff = ((y + cy - 1) * w + (x + cx - 1)) * 4;
-                                let wt = kernel[cy * 3 + cx];
-                                r += src[srcOff] * wt;
-                                g += src[srcOff + 1] * wt;
-                                b += src[srcOff + 2] * wt;
-                            }
-                        }
-                        dst[dstOff] = r; 
-                        dst[dstOff + 1] = g; 
-                        dst[dstOff + 2] = b; 
-                        dst[dstOff + 3] = 255;
-                    }
-                }
-                imageData.data.set(dst);
-                ctx.putImageData(imageData, 0, 0);
-            },
-
-            voerSelectieScanUit: async function() {
-                const bW = parseInt(this.selBox.style.width, 10);
-                const bH = parseInt(this.selBox.style.height, 10);
-                
-                if (bW < 20 || bH < 20) {
-                    this.selBox.style.display = 'none';
-                    return;
-                }
-
-                this.isProcessing = true; 
-                const telemetrie = document.getElementById('webrtc-telemetrie');
-                telemetrie.innerHTML = "SYS_SCAN: <i>Afbeelding uitsnijden en upscalen...</i>";
-
-                const domW = this.overlay.clientWidth;
-                const domH = this.overlay.clientHeight;
-                const vidW = this.video.videoWidth;
-                const vidH = this.video.videoHeight;
-                
-                const scale = Math.max(domW / vidW, domH / vidH);
-                const actualVidW = vidW * scale;
-                const actualVidH = vidH * scale;
-                
-                const offsetX = (actualVidW - domW) / 2;
-                const offsetY = (actualVidH - domH) / 2;
-
-                const bL = parseInt(this.selBox.style.left, 10);
-                const bT = parseInt(this.selBox.style.top, 10);
-
-                const cropX = (bL + offsetX) / scale;
-                const cropY = (bT + offsetY) / scale;
-                const cropW = bW / scale;
-                const cropH = bH / scale;
-
-                let upscaleFactor = 1;
-                if (cropW < 400) upscaleFactor = 2;
-                if (cropW < 200) upscaleFactor = 3;
-
-                this.canvas.width = cropW * upscaleFactor;
-                this.canvas.height = cropH * upscaleFactor;
-                
-                this.ctx.imageSmoothingEnabled = false; 
-
-                if (this.isHandwritingMode) {
-                    this.ctx.filter = 'grayscale(100%) contrast(300%) brightness(120%)';
-                } else {
-                    this.ctx.filter = 'grayscale(100%) contrast(200%) brightness(120%)';
-                }
-                
-                this.ctx.drawImage(this.video, cropX, cropY, cropW, cropH, 0, 0, this.canvas.width, this.canvas.height);
-                this.ctx.filter = 'none';
-
-                telemetrie.innerHTML = "SYS_SCAN: <i>Verscherpings-algoritme toepassen...</i>";
-                this.verscherpBeeld(this.ctx, this.canvas.width, this.canvas.height);
-
-                if (this.isHandwritingMode) {
-                    let imgData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
-                    let data = imgData.data;
-                    for (let i = 0; i < data.length; i += 4) {
-                        let avg = (data[i] + data[i+1] + data[i+2]) / 3;
-                        let val = avg < this.threshold ? 0 : 255; 
-                        data[i] = data[i+1] = data[i+2] = val;
-                    }
-                    this.ctx.putImageData(imgData, 0, 0);
-                }
-
-                const previewCanvas = document.getElementById('ocr-preview');
-                previewCanvas.width = this.canvas.width;
-                previewCanvas.height = this.canvas.height;
-                const prevCtx = previewCanvas.getContext('2d');
-                prevCtx.drawImage(this.canvas, 0, 0);
-                previewCanvas.style.display = 'block';
-
-                try {
-                    const result = await this.worker.recognize(this.canvas);
-                    const text = result.data.text;
+                if (this.mode === 'pan') {
+                    this.isPanning = true;
+                    this.panStartX = clientX - vpSys.state['vp-tr'].panX;
+                    this.panStartY = clientY - vpSys.state['vp-tr'].panY;
+                    this.overlay.style.cursor = 'grabbing';
                     
-                    if (text.trim() === "") {
-                        telemetrie.innerHTML = "SYS_SCAN: Geen tekst herkend. Controleer het preview-venster of pas de Inkt-slider aan.";
-                    } else {
-                        this.lastDetectedText = text; 
-                        let txtFmt = text.replace(/\n/g, '<br>');
-                        telemetrie.innerHTML = `<span style="color:#00f2fe; font-weight:bold;">[SCAN SUCCES]</span><br><span style="color:#fff;">${txtFmt}</span>`;
-                    }
-                } catch (err) {
-                    console.error("Scan Fout:", err);
-                    telemetrie.innerHTML = "SYS_SCAN FOUT: Engine vastgelopen.";
-                } finally {
-                    this.isProcessing = false;
-                    setTimeout(() => { 
-                        this.selBox.style.display = 'none'; 
-                    }, 1000); 
-                }
-            },
-
-            kopieerTekst: function() {
-                if (!this.lastDetectedText) {
-                    alert("Geen tekst beschikbaar om te kopiëren. Trek eerst een selectie met je muis.");
+                    document.addEventListener('mousemove', this.boundMouseMove); 
+                    document.addEventListener('mouseup', this.boundMouseUp); 
+                    document.addEventListener('touchmove', this.boundMouseMove, {passive: false}); 
+                    document.addEventListener('touchend', this.boundMouseUp);
                     return;
                 }
-                navigator.clipboard.writeText(this.lastDetectedText).then(() => {
-                    const btn = document.getElementById('btn-copy-ocr');
-                    const orgText = btn.innerHTML;
-                    btn.innerHTML = "✔ Gekopieerd!";
-                    setTimeout(() => { btn.innerHTML = orgText; }, 2000);
-                });
-            },
 
-            wisTekst: function() {
-                this.lastDetectedText = "";
-                const telemetrie = document.getElementById('webrtc-telemetrie');
-                if (telemetrie) {
-                    telemetrie.innerHTML = "SYS_SCAN: TEKST GEWIST. KLAAR VOOR NIEUWE SCAN.<br>";
-                }
-                const previewCanvas = document.getElementById('ocr-preview');
-                if (previewCanvas) previewCanvas.style.display = 'none';
-            }
-        };
+                this.isSelecting = true; 
+                let pos = this.getMousePos(e); this.sX = pos.x; this.sY = pos.y; 
+                this.selBox.style.left = this.sX + 'px'; this.selBox.style.top = this.sY + 'px'; 
+                this.selBox.style.width = '0px'; this.selBox.style.height = '0px'; 
+                this.selBox.style.display = 'block'; 
+                
+                document.addEventListener('mousemove', this.boundMouseMove); 
+                document.addEventListener('mouseup', this.boundMouseUp); 
+                document.addEventListener('touchmove', this.boundMouseMove); 
+                document.addEventListener('touchend', this.boundMouseUp); 
+            }, 
 
-        // ==========================================
-        // 3. LFSR CRYPTO ENGINE (VP-3)
-        // ==========================================
-        class GaloisLFSR6 {
-            constructor(seed = 1) { this.state = seed & 0x3F; this.mask = 0b100001; }
-            volgendePuls() { let lsb = this.state & 1; this.state >>= 1; if (lsb === 1) this.state ^= this.mask; return this.state; }
-        }
-        const matrixLFSR = new GaloisLFSR6(1); 
-        let cyclusTeller = 0, autoLFSROn = false, lfsrInterval;
-
-        function activeerLFSRCyclus() {
-            let binair = matrixLFSR.volgendePuls();
-            cyclusTeller++;
-            let rotatieHoek = (binair * 137.5) % 360; 
-            draaiKaart(rotatieHoek);
-        }
-        function toggleAutoLFSR() {
-            autoLFSROn = !autoLFSROn;
-            let btn = document.getElementById('btn-auto-lfsr');
-            if (autoLFSROn) { btn.innerHTML = "⏸ Stop"; btn.style.backgroundColor = "#c0392b"; lfsrInterval = setInterval(activeerLFSRCyclus, 1200); } 
-            else { btn.innerHTML = "▶ Auto Loop"; btn.style.backgroundColor = "#d35400"; clearInterval(lfsrInterval); }
-        }
-
-        // ==========================================
-        // 4. HOOFDKAART GLOBALE ROTATIES
-        // ==========================================
-        function getQuatMatrix(graden) {
-            let rad = graden * (Math.PI / 180);
-            let w = Math.cos(rad / 2), z = Math.sin(rad / 2);
-            let m11 = 1 - 2*z*z, m12 = 2*w*z, m21 = -2*w*z, m22 = 1 - 2*z*z;
-            return `matrix3d(${m11}, ${m12}, 0, 0, ${m21}, ${m22}, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)`;
-        }
-        window.huidigeAchtergrondRotatie = 0; window.huidigeKaartRotatie = 0;
-        function draaiAchtergrond(graden) { window.huidigeAchtergrondRotatie = graden; document.getElementById('achtergrond-wrapper').style.transform = getQuatMatrix(graden); }
-        function stapAchtergrond(stap) { window.huidigeAchtergrondRotatie = (window.huidigeAchtergrondRotatie + stap) % 360; document.getElementById('achtergrond-wrapper').style.transform = getQuatMatrix(window.huidigeAchtergrondRotatie); }
-        function draaiKaart(graden) { window.huidigeKaartRotatie = graden; document.getElementById('hex-container').style.transform = getQuatMatrix(graden); }
-
-        // ==========================================
-        // 5. MAPS INITIALISATIE
-        // ==========================================
-        const paneel = document.getElementById('bedienings-paneel');
-        const header = document.getElementById('paneel-header');
-        let isDraggingMenu = false, menuOffsetX, menuOffsetY;
-        header.addEventListener('mousedown', (e) => { isDraggingMenu = true; let rect = paneel.getBoundingClientRect(); menuOffsetX = e.clientX - rect.left; menuOffsetY = e.clientY - rect.top; });
-        document.addEventListener('mousemove', (e) => { if (!isDraggingMenu) return; paneel.style.left = (e.clientX - menuOffsetX) + 'px'; paneel.style.top = (e.clientY - menuOffsetY) + 'px'; paneel.style.transform = 'none'; });
-        document.addEventListener('mouseup', () => { isDraggingMenu = false; });
-
-        var achtergrondMap = L.map('achtergrond-kaart', { zoomControl: false, minZoom: 1, maxZoom: 19 }).setView([51.5, 4.5], 8);
-        
-        var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
-        var cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20 });
-        var esriLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 });
-        var topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17 });
-        var seaMapLayer = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', { maxZoom: 18 });
-
-        function wisselAchtergrond() {
-            var keuze = document.getElementById("achtergrond-kies-menu").value;
-            achtergrondMap.eachLayer(layer => { if (layer instanceof L.TileLayer) achtergrondMap.removeLayer(layer); });
-            if (keuze === "zeekaart") { osmLayer.addTo(achtergrondMap); seaMapLayer.addTo(achtergrondMap); } 
-            else if (keuze === "osm") osmLayer.addTo(achtergrondMap);
-            else if (keuze === "esri") esriLayer.addTo(achtergrondMap);
-            else if (keuze === "carto") cartoLayer.addTo(achtergrondMap);
-            else if (keuze === "topo") topoLayer.addTo(achtergrondMap);
-        }
-        wisselAchtergrond();
-        function zoomAchtergrond(actie) { if (actie === 'in') achtergrondMap.setZoom(achtergrondMap.getMaxZoom()); else achtergrondMap.setZoom(achtergrondMap.getMinZoom() || 1); }
-
-        function genereerHexRaster(cols, rows, r) {
-            const canvas = document.createElement('canvas');
-            const hB = Math.sqrt(3) * r; const hH = 2 * r;
-            canvas.width = cols * hB + (hB / 2); canvas.height = rows * (hH * 0.75) + (hH / 4);
-            const ctx = canvas.getContext('2d');
-            ctx.strokeStyle = 'rgba(31, 111, 235, 0.7)'; ctx.lineWidth = 1.5;
-            for (let rij = 0; rij < rows; rij++) {
-                for (let kol = 0; kol < cols; kol++) {
-                    let x = kol * hB + (rij % 2 === 1 ? hB / 2 : 0) + hB / 2;
-                    let y = rij * (hH * 0.75) + hH / 2;
-                    ctx.beginPath();
-                    for (let i = 0; i < 6; i++) { let hoek = (Math.PI / 180) * (60 * i - 30); ctx.lineTo(x + r * Math.cos(hoek), y + r * Math.sin(hoek)); }
-                    ctx.closePath(); ctx.stroke();
-                }
-            }
-            return { imgData: canvas.toDataURL('image/png'), bounds: [[0, 0], [canvas.height, canvas.width]] };
-        }
-        var hexMap = L.map('hex-kaart', { zoomControl: false, crs: L.CRS.Simple, minZoom: -2, maxZoom: 3 });
-        const hexData = genereerHexRaster(13, 18, 45); 
-        L.imageOverlay(hexData.imgData, hexData.bounds).addTo(hexMap);
-        hexMap.fitBounds(hexData.bounds);
-
-        L.Draggable.prototype._onMove = function (e) {
-            if (e._simulated || !this._enabled) return;
-            if (e.touches && e.touches.length > 1) { this._moved = true; return; }
-            var first = (e.touches && e.touches.length === 1 ? e.touches[0] : e);
-            var rawOffset = new L.Point(first.clientX, first.clientY).subtract(this._startPoint);
-            if (!rawOffset.x && !rawOffset.y) return;
-            let rad = 0;
-            if (this._element.closest('#hex-container')) rad = -(window.huidigeKaartRotatie || 0) * (Math.PI / 180);
-            else if (this._element.closest('#achtergrond-wrapper')) rad = -(window.huidigeAchtergrondRotatie || 0) * (Math.PI / 180);
-            var w = Math.cos(rad / 2); var z = Math.sin(rad / 2);
-            var qNx = (w*w - z*z)*rawOffset.x - (2*w*z)*rawOffset.y;
-            var qNy = (2*w*z)*rawOffset.x + (w*w - z*z)*rawOffset.y;
-            var offset = new L.Point(qNx, qNy);
-            L.DomEvent.preventDefault(e);
-            if (!this._moved) { this.fire('dragstart'); this._moved = true; this._startPos = L.DomUtil.getPosition(this._element).subtract(offset); }
-            this._newPos = this._startPos.add(offset); this._moving = true;
-            L.Util.cancelAnimFrame(this._animRequest); this._animRequest = L.Util.requestAnimFrame(this._updatePosition, this, true);
-        };
-
-        // ==========================================
-        // 6. ASTROLABIUM RADAR (VP-1)
-        // ==========================================
-        function drawAstro() {}
-        
-        const astrolabium = {
-            canvas: null, ctx: null, lon: 5.22, lat: 52.25,
-            sterren: [ { id: 1, naam: "Deneb", ra: 20.69, dec: 45.28, type: "ster" }, { id: 2, naam: "Altair", ra: 19.85, dec: 8.87, type: "ster" }, { id: 3, naam: "Enif", ra: 21.73, dec: 9.87, type: "ster" }, { id: 9, naam: "M15 Cluster", ra: 21.50, dec: 12.17, type: "cluster" } ],
-            verbindingen: [[1, 3], [2, 3]],
-            init: function() {
-                this.canvas = document.getElementById('astro-canvas');
-                if (!this.canvas) return;
-                this.ctx = this.canvas.getContext('2d');
-                this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
-                this.canvas.height = this.canvas.clientHeight * window.devicePixelRatio;
-                this.tekenCyclus();
-            },
-            tekenCyclus: function() {
-                const w = this.canvas.width; const h = this.canvas.height;
-                const cx = w / 2; const cy = h / 2; const radius = Math.min(cx, cy) * 0.70;
-                this.ctx.clearRect(0, 0, w, h);
-                this.ctx.lineWidth = 1.5; this.ctx.strokeStyle = 'rgba(31, 111, 235, 0.5)';
-                this.ctx.beginPath(); this.ctx.arc(cx, cy, radius, 0, 2*Math.PI); this.ctx.stroke();
-                this.ctx.beginPath(); this.ctx.arc(cx, cy, radius*0.5, 0, 2*Math.PI); this.ctx.stroke();
-                this.ctx.fillStyle = '#58a6ff'; this.ctx.textAlign = 'center'; this.ctx.textBaseline = 'middle';
-
-                for (let graden = 0; graden < 360; graden += 15) {
-                    let rad_hoek = graden * (Math.PI / 180);
-                    let lx = cx + (radius * 1.15) * Math.cos(rad_hoek); let ly = cy + (radius * 1.15) * -Math.sin(rad_hoek);
-                    this.ctx.font = '12px monospace';
-                    if (graden === 0) this.ctx.fillText(`N (0°/0h)`, lx, ly); else if (graden === 90) this.ctx.fillText(`O (90°/6h)`, lx, ly); else if (graden === 180) this.ctx.fillText(`Z (180°/12h)`, lx, ly); else if (graden === 270) this.ctx.fillText(`W (270°/18h)`, lx, ly);
-                    else { this.ctx.font = '9px monospace'; this.ctx.fillStyle = 'rgba(88, 166, 255, 0.6)'; this.ctx.fillText(`${graden}°`, lx, ly); this.ctx.fillStyle = '#58a6ff'; }
+            onMouseMove: function(e) { 
+                if (this.isPanning) {
+                    let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    vpSys.state['vp-tr'].panX = clientX - this.panStartX;
+                    vpSys.state['vp-tr'].panY = clientY - this.panStartY;
+                    vpSys.update('vp-tr');
+                    return;
                 }
 
-                const nu = new Date(); const dagen = (nu - new Date(Date.UTC(nu.getUTCFullYear(), 0, 1))) / 86400000;
-                let lst = (100.46 + 0.985647 * dagen + this.lon + 15 * (nu.getUTCHours() + nu.getUTCMinutes()/60)) % 360;
-                const rad = Math.PI / 180; let pos = {};
+                if (!this.isSelecting) return; 
+                let pos = this.getMousePos(e); this.eX = pos.x; this.eY = pos.y; 
+                const domW = this.overlay.clientWidth; const domH = this.overlay.clientHeight; 
+                this.eX = Math.max(0, Math.min(this.eX, domW)); this.eY = Math.max(0, Math.min(this.eY, domH)); 
+                const left = Math.min(this.sX, this.eX); const top = Math.min(this.sY, this.eY); 
+                const width = Math.abs(this.eX - this.sX); const height = Math.abs(this.eY - this.sY); 
+                this.selBox.style.left = left + 'px'; this.selBox.style.top = top + 'px'; 
+                this.selBox.style.width = width + 'px'; this.selBox.style.height = height + 'px'; 
+            }, 
 
-                this.sterren.forEach(ster => {
-                    let ha = (lst - (ster.ra * 15)) * rad; let dec_r = ster.dec * rad; let lat_r = this.lat * rad;
-                    let sin_alt = Math.sin(dec_r)*Math.sin(lat_r) + Math.cos(dec_r)*Math.cos(lat_r)*Math.cos(ha);
-                    let alt = Math.asin(sin_alt);
-                    let az = Math.atan2(-(Math.sin(ha)*Math.cos(dec_r))/Math.cos(alt), (Math.sin(dec_r)-Math.sin(lat_r)*sin_alt)/(Math.cos(lat_r)*Math.cos(alt)));
-                    if (alt > 0) { 
-                        let r_n = 1 - (alt / (Math.PI/2)); let px = cx + (r_n * radius) * Math.cos(az); let py = cy + (r_n * radius) * -Math.sin(az);
-                        pos[ster.id] = {x: px, y: py};
-                        this.ctx.fillStyle = ster.type === 'cluster' ? '#ff7b72' : '#ffffff';
-                        this.ctx.beginPath(); this.ctx.arc(px, py, 3, 0, 2*Math.PI); this.ctx.fill();
-                        this.ctx.fillText(ster.naam, px, py - 12);
+            onMouseUp: function(e) { 
+                document.removeEventListener('mousemove', this.boundMouseMove); 
+                document.removeEventListener('mouseup', this.boundMouseUp); 
+                document.removeEventListener('touchmove', this.boundMouseMove); 
+                document.removeEventListener('touchend', this.boundMouseUp); 
+
+                if (this.isPanning) {
+                    this.isPanning = false;
+                    this.overlay.style.cursor = 'grab';
+                    return;
+                }
+
+                if(!this.isSelecting) return; 
+                this.isSelecting = false; 
+                this.voerSelectieScanUit(); 
+            }, 
+
+            verscherpBeeld: function(ctx, w, h) { 
+                let imageData = ctx.getImageData(0, 0, w, h); 
+                let src = imageData.data; let dst = new Uint8ClampedArray(src.length); 
+                let kernel = [ 0, -1, 0, -1, 5, -1, 0, -1, 0 ]; 
+                for (let y = 1; y < h - 1; y++) { 
+                    for (let x = 1; x < w - 1; x++) { 
+                        let dstOff = (y * w + x) * 4; let r = 0, g = 0, b = 0; 
+                        for (let cy = 0; cy < 3; cy++) { 
+                            for (let cx = 0; cx < 3; cx++) { 
+                                let srcOff = ((y + cy - 1) * w + (x + cx - 1)) * 4; 
+                                let wt = kernel[cy * 3 + cx]; 
+                                r += src[srcOff] * wt; g += src[srcOff + 1] * wt; b += src[srcOff + 2] * wt; 
+                            } 
+                        } 
+                        dst[dstOff] = r; dst[dstOff + 1] = g; dst[dstOff + 2] = b; dst[dstOff + 3] = 255; 
+                    } 
+                } 
+                imageData.data.set(dst); ctx.putImageData(imageData, 0, 0); 
+            }, 
+
+            voerSelectieScanUit: async function() { 
+                const bW = parseInt(this.selBox.style.width, 10); const bH = parseInt(this.selBox.style.height, 10); 
+                if (bW < 20 || bH < 20) { this.selBox.style.display = 'none'; return; } 
+
+                this.isProcessing = true;  
+                const telemetrie = document.getElementById('webrtc-telemetrie'); 
+                telemetrie.innerHTML = "SYS_SCAN: <i>Afbeelding uitsnijden...</i>"; 
+
+                const domW = this.overlay.clientWidth; const domH = this.overlay.clientHeight; 
+                const vidW = this.video.videoWidth; const vidH = this.video.videoHeight; 
+                const scale = Math.max(domW / vidW, domH / vidH); 
+                const actualVidW = vidW * scale; const actualVidH = vidH * scale; 
+                const offsetX = (actualVidW - domW) / 2; const offsetY = (actualVidH - domH) / 2; 
+                const bL = parseInt(this.selBox.style.left, 10); const bT = parseInt(this.selBox.style.top, 10); 
+                const cropX = (bL + offsetX) / scale; const cropY = (bT + offsetY) / scale; 
+                const cropW = bW / scale; const cropH = bH / scale; 
+
+                let upscaleFactor = 1; if (cropW < 400) upscaleFactor = 2; if (cropW < 200) upscaleFactor = 3; 
+
+                this.canvas.width = cropW * upscaleFactor; this.canvas.height = cropH * upscaleFactor; 
+                this.ctx.imageSmoothingEnabled = false;  
+
+                let c = document.getElementById('flt-contrast').value;
+                let b = document.getElementById('flt-bright').value;
+                let g = document.getElementById('flt-gray').value;
+                let i = document.getElementById('flt-invert').value;
+                let sat = document.getElementById('flt-saturate').value;
+                let sep = document.getElementById('flt-sepia').value;
+
+                // De CSS filters voor Tesseract's beeld verwerken
+                if (this.isHandwritingMode) { 
+                    this.ctx.filter = `contrast(3) brightness(1.2) grayscale(1) invert(${i})`; 
+                } else { 
+                    this.ctx.filter = `contrast(${c}) brightness(${b}) grayscale(${g}) invert(${i}) saturate(${sat}) sepia(${sep})`; 
+                } 
+                 
+                this.ctx.drawImage(this.video, cropX, cropY, cropW, cropH, 0, 0, this.canvas.width, this.canvas.height); 
+                this.ctx.filter = 'none'; 
+
+                this.verscherpBeeld(this.ctx, this.canvas.width, this.canvas.height); 
+
+                if (this.isHandwritingMode) { 
+                    let imgData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height); 
+                    let data = imgData.data; 
+                    for (let idx = 0; idx < data.length; idx += 4) { 
+                        let avg = (data[idx] + data[idx+1] + data[idx+2]) / 3; 
+                        let val = avg < this.threshold ? 0 : 255;  
+                        data[idx] = data[idx+1] = data[idx+2] = val; 
+                    } 
+                    this.ctx.putImageData(imgData, 0, 0); 
+                } 
+
+                const previewCanvas = document.getElementById('ocr-preview'); 
+                previewCanvas.width = this.canvas.width; previewCanvas.height = this.canvas.height; 
+                const prevCtx = previewCanvas.getContext('2d'); prevCtx.drawImage(this.canvas, 0, 0); 
+                previewCanvas.style.display = 'block'; 
+
+                try { 
+                    const result = await this.worker.recognize(this.canvas); 
+                    const text = result.data.text; 
+                    if (text.trim() === "") { telemetrie.innerHTML = "SYS_SCAN: Geen tekst herkend."; } 
+                    else { 
+                        this.lastDetectedText = text;  
+                        let txtFmt = text.replace(/\n/g, '<br>'); 
+                        telemetrie.innerHTML = `<span style="color:#00f2fe; font-weight:bold;">[SCAN SUCCES]</span><br><span style="color:#fff;">${txtFmt}</span>`; 
+                    } 
+                } catch (err) { 
+                    console.error("Scan Fout:", err); telemetrie.innerHTML = "SYS_SCAN FOUT: Engine vastgelopen."; 
+                } finally { 
+                    this.isProcessing = false; setTimeout(() => { this.selBox.style.display = 'none'; }, 1000);  
+                } 
+            }, 
+
+            kopieerTekst: function() { 
+                if (!this.lastDetectedText) return; 
+                navigator.clipboard.writeText(this.lastDetectedText).then(() => { 
+                    const btn = document.getElementById('btn-copy-ocr'); const orgText = btn.innerHTML; 
+                    btn.innerHTML = "✔"; setTimeout(() => { btn.innerHTML = orgText; }, 2000); 
+                }); 
+            }, 
+
+            wisTekst: function() { 
+                this.lastDetectedText = ""; 
+                const telemetrie = document.getElementById('webrtc-telemetrie'); 
+                if (telemetrie) { telemetrie.innerHTML = "SYS_SCAN: TEKST GEWIST. KLAAR VOOR NIEUWE SCAN.<br>"; } 
+                const previewCanvas = document.getElementById('ocr-preview'); 
+                if (previewCanvas) previewCanvas.style.display = 'none'; 
+            } 
+        }; 
+
+        // ========================================== 
+        // 4. HOOFDKAART GLOBALE ROTATIES 
+        // ========================================== 
+        function getQuatMatrix(graden) { 
+            let rad = graden * (Math.PI / 180); 
+            let w = Math.cos(rad / 2), z = Math.sin(rad / 2); 
+            let m11 = 1 - 2*z*z, m12 = 2*w*z, m21 = -2*w*z, m22 = 1 - 2*z*z; 
+            return `matrix3d(${m11}, ${m12}, 0, 0, ${m21}, ${m22}, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)`; 
+        } 
+        window.huidigeAchtergrondRotatie = 0; 
+        function draaiAchtergrond(graden) { window.huidigeAchtergrondRotatie = graden; document.getElementById('achtergrond-wrapper').style.transform = getQuatMatrix(graden); } 
+        function stapAchtergrond(stap) { window.huidigeAchtergrondRotatie = (window.huidigeAchtergrondRotatie + stap) % 360; document.getElementById('achtergrond-wrapper').style.transform = getQuatMatrix(window.huidigeAchtergrondRotatie); } 
+
+        // ========================================== 
+        // 5. MAPS INITIALISATIE 
+        // ========================================== 
+        const paneel = document.getElementById('bedienings-paneel'); 
+        const header = document.getElementById('paneel-header'); 
+        let isDraggingMenu = false, menuOffsetX, menuOffsetY; 
+
+        header.addEventListener('mousedown', (e) => { isDraggingMenu = true; let rect = paneel.getBoundingClientRect(); menuOffsetX = e.clientX - rect.left; menuOffsetY = e.clientY - rect.top; }); 
+        document.addEventListener('mousemove', (e) => { if (!isDraggingMenu) return; paneel.style.left = (e.clientX - menuOffsetX) + 'px'; paneel.style.top = (e.clientY - menuOffsetY) + 'px'; paneel.style.transform = 'none'; }); 
+        document.addEventListener('mouseup', () => { isDraggingMenu = false; }); 
+
+        var achtergrondMap = L.map('achtergrond-kaart', { zoomControl: false, minZoom: 1, maxZoom: 19 }).setView([51.5, 4.5], 8); 
+         
+        var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }); 
+        var cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20 }); 
+        var esriLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 }); 
+        var topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17 }); 
+        var seaMapLayer = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', { maxZoom: 18 }); 
+
+        function wisselAchtergrond() { 
+            var keuze = document.getElementById("achtergrond-kies-menu").value; 
+            achtergrondMap.eachLayer(layer => { if (layer instanceof L.TileLayer) achtergrondMap.removeLayer(layer); }); 
+            if (keuze === "zeekaart") { osmLayer.addTo(achtergrondMap); seaMapLayer.addTo(achtergrondMap); }  
+            else if (keuze === "osm") osmLayer.addTo(achtergrondMap); 
+            else if (keuze === "esri") esriLayer.addTo(achtergrondMap); 
+            else if (keuze === "carto") cartoLayer.addTo(achtergrondMap); 
+            else if (keuze === "topo") topoLayer.addTo(achtergrondMap); 
+        } 
+        wisselAchtergrond(); 
+
+        function zoomAchtergrond(actie) { if (actie === 'in') achtergrondMap.setZoom(achtergrondMap.getMaxZoom()); else achtergrondMap.setZoom(achtergrondMap.getMinZoom() || 1); } 
+
+        L.Draggable.prototype._onMove = function (e) { 
+            if (e._simulated || !this._enabled) return; 
+            if (e.touches && e.touches.length > 1) { this._moved = true; return; } 
+            var first = (e.touches && e.touches.length === 1 ? e.touches[0] : e); 
+            var rawOffset = new L.Point(first.clientX, first.clientY).subtract(this._startPoint); 
+            if (!rawOffset.x && !rawOffset.y) return; 
+            let rad = 0; 
+            if (this._element.closest('#achtergrond-wrapper')) rad = -(window.huidigeAchtergrondRotatie || 0) * (Math.PI / 180); 
+            var w = Math.cos(rad / 2); var z = Math.sin(rad / 2); 
+            var qNx = (w*w - z*z)*rawOffset.x - (2*w*z)*rawOffset.y; 
+            var qNy = (2*w*z)*rawOffset.x + (w*w - z*z)*rawOffset.y; 
+            var offset = new L.Point(qNx, qNy); 
+            L.DomEvent.preventDefault(e); 
+            if (!this._moved) { this.fire('dragstart'); this._moved = true; this._startPos = L.DomUtil.getPosition(this._element).subtract(offset); } 
+            this._newPos = this._startPos.add(offset); this._moving = true; 
+            L.Util.cancelAnimFrame(this._animRequest); this._animRequest = L.Util.requestAnimFrame(this._updatePosition, this, true); 
+        }; 
+
+        // ========================================== 
+        // 6. ASTROLABIUM RADAR, PLANETEN & POPUP UI
+        // ========================================== 
+        const astrolabium = { 
+            canvas: null, ctx: null, lon: 5.226, lat: 52.256, 
+            pos: {}, 
+            selectedStarId: null,
+
+            sterren: [ 
+                { id: 1, naam: "Deneb", ra: 20.69, dec: 45.28, type: "ster" }, 
+                { id: 2, naam: "Altair", ra: 19.85, dec: 8.87, type: "ster" }, 
+                { id: 3, naam: "Enif", ra: 21.73, dec: 9.87, type: "ster" }, 
+                { id: 9, naam: "M15 Cluster", ra: 21.50, dec: 12.17, type: "cluster" },
+                { id: 10, naam: "ZON", ra: 10.5, dec: 10.0, type: "zon" },
+                { id: 11, naam: "MAAN", ra: 14.2, dec: -15.0, type: "maan" },
+                { id: 12, naam: "Jupiter", ra: 6.0, dec: 23.0, type: "planeet" },
+                { id: 13, naam: "Venus", ra: 9.0, dec: 18.0, type: "planeet" },
+                { id: 14, naam: "Mars", ra: 4.5, dec: 24.0, type: "planeet" }
+            ], 
+            verbindingen: [[1, 3], [2, 3]], 
+            
+            init: function() { 
+                this.canvas = document.getElementById('astro-canvas'); 
+                if (!this.canvas) return; 
+                this.ctx = this.canvas.getContext('2d'); 
+                this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio; 
+                this.canvas.height = this.canvas.clientHeight * window.devicePixelRatio; 
+                
+                this.canvas.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0) return; 
+                    
+                    let rect = this.canvas.getBoundingClientRect();
+                    let state = vpSys.state['vp-tl'];
+                    let zoom = state.zoom;
+
+                    let mouseX = ((e.clientX - rect.left) / zoom) * window.devicePixelRatio;
+                    let mouseY = ((e.clientY - rect.top) / zoom) * window.devicePixelRatio;
+                    
+                    let clickedStar = null;
+                    let minDist = 25 * window.devicePixelRatio; 
+
+                    for (let id in this.pos) {
+                        let p = this.pos[id];
+                        let dx = p.x - mouseX;
+                        let dy = p.y - mouseY;
+                        if (Math.sqrt(dx*dx + dy*dy) < minDist) {
+                            clickedStar = id;
+                            break; 
+                        }
+                    }
+                    
+                    const popup = document.getElementById('astro-popup');
+                    
+                    if (clickedStar) {
+                        this.selectedStarId = clickedStar;
+                        let p = this.pos[clickedStar];
+                        let s = p.ster;
+                        
+                        document.getElementById('ap-title').innerText = "⌖ " + s.naam.toUpperCase();
+                        
+                        let typeKleur = '#ffffff';
+                        if(s.type === 'zon') typeKleur = '#ffb300';
+                        if(s.type === 'maan') typeKleur = '#e2e8f0';
+                        if(s.type === 'planeet') typeKleur = '#ff7b72';
+                        if(s.type === 'cluster') typeKleur = '#a278ff';
+                        
+                        let spanType = document.getElementById('ap-type');
+                        spanType.innerText = s.type.toUpperCase();
+                        spanType.style.color = typeKleur;
+
+                        document.getElementById('ap-ra').innerText = s.ra.toFixed(2) + 'h';
+                        document.getElementById('ap-dec').innerText = s.dec.toFixed(2) + '°';
+                        
+                        // Zorg dat hij direct instelt op click, geen 1 frame lag
+                        document.getElementById('ap-az').innerText = p.az_deg.toFixed(2) + '°';
+                        document.getElementById('ap-alt').innerText = p.alt_deg.toFixed(2) + '°';
+                        
+                        let vpRect = document.getElementById('vp-tl').getBoundingClientRect();
+                        popup.style.left = (e.clientX - vpRect.left + 20) + 'px';
+                        popup.style.top = (e.clientY - vpRect.top + 10) + 'px';
+                        popup.style.display = 'block';
+                    } else {
+                        this.sluitPopup();
                     }
                 });
-                this.ctx.strokeStyle = 'rgba(0, 242, 254, 0.4)'; this.ctx.beginPath();
-                this.verbindingen.forEach(v => { if(pos[v[0]] && pos[v[1]]) { this.ctx.moveTo(pos[v[0]].x, pos[v[0]].y); this.ctx.lineTo(pos[v[1]].x, pos[v[1]].y); } });
-                this.ctx.stroke();
-                requestAnimationFrame(() => this.tekenCyclus());
-            }
-        };
 
-        // ==========================================
-        // 7. ANKERS & UPLOADS
-        // ==========================================
-        function uploadPlaatje(event, contentId) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    let container = document.getElementById(contentId);
-                    let existingImg = container.querySelector('.user-image-overlay');
-                    if(existingImg) existingImg.src = e.target.result;
-                    else { let img = document.createElement('img'); img.src = e.target.result; img.className = 'user-image-overlay'; container.appendChild(img); }
-                }
-                reader.readAsDataURL(file);
-            }
-        }
-        function verwijderPlaatje(contentId) {
-            let container = document.getElementById(contentId);
-            let img = container.querySelector('.user-image-overlay');
-            if (img) container.removeChild(img);
-        }
+                this.tekenCyclus(); 
+            }, 
 
-        var iteratieTeller = 1;
-        async function zoekAnkerLocatie() {
-            let input = document.getElementById('anker-zoek').value;
-            if (!input) return;
-            let coordMatch = input.match(/(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)/);
-            if (coordMatch) achtergrondMap.flyTo([parseFloat(coordMatch[1]), parseFloat(coordMatch[2])], 14, { animate: true, duration: 1.5 });
-            else {
+            sluitPopup: function() {
+                document.getElementById('astro-popup').style.display = 'none';
+                this.selectedStarId = null;
+            },
+
+            tekenCyclus: function() { 
+                const w = this.canvas.width; const h = this.canvas.height; 
+                const cx = w / 2; const cy = h / 2; const radius = Math.min(cx, cy) * 0.70; 
+                this.ctx.clearRect(0, 0, w, h); 
+                this.pos = {}; 
+                
+                this.ctx.shadowBlur = 15;
+                this.ctx.shadowColor = '#00f2fe';
+                this.ctx.lineWidth = 2.5; 
+                this.ctx.strokeStyle = 'rgba(0, 242, 254, 0.9)'; 
+                
+                this.ctx.beginPath(); this.ctx.arc(cx, cy, radius, 0, 2*Math.PI); this.ctx.stroke(); 
+                this.ctx.beginPath(); this.ctx.arc(cx, cy, radius*0.5, 0, 2*Math.PI); this.ctx.stroke(); 
+                
+                this.ctx.shadowBlur = 0; 
+                this.ctx.fillStyle = '#ffffff'; this.ctx.textAlign = 'center'; this.ctx.textBaseline = 'middle'; 
+
+                for (let graden = 0; graden < 360; graden += 15) { 
+                    let rad_hoek = graden * (Math.PI / 180); 
+                    let lx = cx + (radius * 1.15) * Math.cos(rad_hoek); let ly = cy + (radius * 1.15) * -Math.sin(rad_hoek); 
+                    this.ctx.font = 'bold 12px monospace'; 
+
+                    if (graden === 0) this.ctx.fillText(`N (0°)`, lx, ly); else if (graden === 90) this.ctx.fillText(`O (90°)`, lx, ly); else if (graden === 180) this.ctx.fillText(`Z (180°)`, lx, ly); else if (graden === 270) this.ctx.fillText(`W (270°)`, lx, ly); 
+                    else { this.ctx.font = '10px monospace'; this.ctx.fillStyle = 'rgba(0, 242, 254, 0.8)'; this.ctx.fillText(`${graden}°`, lx, ly); this.ctx.fillStyle = '#ffffff'; } 
+                } 
+
+                const nu = new Date(); const dagen = (nu - new Date(Date.UTC(nu.getUTCFullYear(), 0, 1))) / 86400000; 
+                let lst = (100.46 + 0.985647 * dagen + this.lon + 15 * (nu.getUTCHours() + nu.getUTCMinutes()/60)) % 360; 
+                const rad = Math.PI / 180; 
+
+                this.ctx.shadowBlur = 0;
+                this.ctx.textAlign = 'left';
+                this.ctx.font = 'bold 11px monospace';
+                this.ctx.fillStyle = '#00f2fe';
+                let lst_h = Math.floor(lst / 15);
+                let lst_m = Math.floor(((lst / 15) - lst_h) * 60);
+                this.ctx.fillText(`Lokale Sterrentijd (LST): ${lst_h}h ${lst_m}m`, 15, 25);
+                this.ctx.fillStyle = '#c9d1d9';
+                this.ctx.fillText(`Locatie: ${this.lat.toFixed(3)}°N, ${this.lon.toFixed(3)}°E`, 15, 40);
+                this.ctx.textAlign = 'center';
+
+                this.sterren.forEach(ster => { 
+                    let ha = (lst - (ster.ra * 15)) * rad; let dec_r = ster.dec * rad; let lat_r = this.lat * rad; 
+                    let sin_alt = Math.sin(dec_r)*Math.sin(lat_r) + Math.cos(dec_r)*Math.cos(lat_r)*Math.cos(ha); 
+                    let alt = Math.asin(sin_alt); 
+                    let az = Math.atan2(-(Math.sin(ha)*Math.cos(dec_r))/Math.cos(alt), (Math.sin(dec_r)-Math.sin(lat_r)*sin_alt)/(Math.cos(lat_r)*Math.cos(alt))); 
+                     
+                    if (alt > 0) {  
+                        let r_n = 1 - (alt / (Math.PI/2)); let px = cx + (r_n * radius) * Math.cos(az); let py = cy + (r_n * radius) * -Math.sin(az); 
+                        
+                        let az_deg = (az * (180 / Math.PI) + 360) % 360;
+                        let alt_deg = alt * (180 / Math.PI);
+                        
+                        this.pos[ster.id] = { x: px, y: py, az_deg: az_deg, alt_deg: alt_deg, ster: ster }; 
+                        
+                        if (ster.type === 'zon') {
+                            this.ctx.fillStyle = '#ffb300';
+                            this.ctx.shadowBlur = 20; this.ctx.shadowColor = '#ffb300';
+                            this.ctx.beginPath(); this.ctx.arc(px, py, 6, 0, 2*Math.PI); this.ctx.fill();
+                        } else if (ster.type === 'maan') {
+                            this.ctx.fillStyle = '#e2e8f0';
+                            this.ctx.shadowBlur = 15; this.ctx.shadowColor = '#ffffff';
+                            this.ctx.beginPath(); this.ctx.arc(px, py, 5, 0, 2*Math.PI); this.ctx.fill();
+                        } else if (ster.type === 'planeet') {
+                            this.ctx.fillStyle = '#ff7b72';
+                            this.ctx.shadowBlur = 8; this.ctx.shadowColor = '#ff7b72';
+                            this.ctx.beginPath(); this.ctx.arc(px, py, 4, 0, 2*Math.PI); this.ctx.fill();
+                        } else {
+                            this.ctx.fillStyle = ster.type === 'cluster' ? '#a278ff' : '#ffffff'; 
+                            this.ctx.shadowBlur = 5; this.ctx.shadowColor = '#ffffff';
+                            this.ctx.beginPath(); this.ctx.arc(px, py, 2.5, 0, 2*Math.PI); this.ctx.fill(); 
+                        }
+                        
+                        this.ctx.shadowBlur = 0; 
+                        this.ctx.fillStyle = '#ffffff';
+                        this.ctx.font = 'bold 11px monospace';
+                        this.ctx.fillText(ster.naam, px, py - 14); 
+
+                        this.ctx.font = '9px monospace';
+                        this.ctx.fillStyle = 'rgba(201, 209, 217, 0.8)';
+                        this.ctx.fillText(`AZ:${az_deg.toFixed(1)}° H:${alt_deg.toFixed(1)}°`, px, py + 12);
+
+                        if (this.selectedStarId === ster.id) {
+                            document.getElementById('ap-az').innerText = az_deg.toFixed(2) + '°';
+                            document.getElementById('ap-alt').innerText = alt_deg.toFixed(2) + '°';
+                        }
+                    } 
+                }); 
+                
+                this.ctx.lineWidth = 1.5;
+                this.ctx.strokeStyle = 'rgba(0, 242, 254, 0.4)'; this.ctx.beginPath(); 
+                this.verbindingen.forEach(v => { if(this.pos[v[0]] && this.pos[v[1]]) { this.ctx.moveTo(this.pos[v[0]].x, this.pos[v[0]].y); this.ctx.lineTo(this.pos[v[1]].x, this.pos[v[1]].y); } }); 
+                this.ctx.stroke(); 
+
+                requestAnimationFrame(() => this.tekenCyclus()); 
+            } 
+        }; 
+
+        async function updateAstroLocatie(event) {
+            let input = document.getElementById('astro-locatie').value;
+            let btn = event.target;
+            let orgText = btn.innerHTML;
+            btn.innerHTML = "⏳ Zoeken...";
+            
+            try {
                 let res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(input)}`);
                 let data = await res.json();
-                if (data.length > 0) achtergrondMap.flyTo([parseFloat(data[0].lat), parseFloat(data[0].lon)], 14, { animate: true, duration: 1.5 });
+                
+                if (data.length > 0) {
+                    let lat = parseFloat(data[0].lat);
+                    let lon = parseFloat(data[0].lon);
+                    
+                    document.getElementById('astro-lat').value = lat.toFixed(4);
+                    document.getElementById('astro-lon').value = lon.toFixed(4);
+                    
+                    astrolabium.lat = lat;
+                    astrolabium.lon = lon;
+                    
+                    achtergrondMap.flyTo([lat, lon], 10, { animate: true, duration: 1.5 });
+                    
+                    btn.innerHTML = "✔ Geüpdatet";
+                } else {
+                    btn.innerHTML = "❌ Niet Gevonden";
+                }
+            } catch (err) {
+                btn.innerHTML = "❌ Netwerkfout";
             }
+            
+            setTimeout(() => { btn.innerHTML = orgText; }, 2000);
         }
 
-        function plaatsAnker(vormType) {
-            let center = achtergrondMap.getCenter();
-            let kleur = document.getElementById('marker-kleur').value;
-            let naam = document.getElementById('anker-naam').value || `Anker ${iteratieTeller}`;
-            let initiaal = naam.substring(0, 3).toUpperCase();
-            let markerId = 'dyn-maker-' + iteratieTeller;
-            
-            var customIcon = L.divIcon({ 
-                 className: '', 
-                 html: `<div class="roterende-groep dyn-maker" id="${markerId}">
-                           <div class="basis-vorm vorm-${vormType}" style="background-color: ${kleur}; border-color: #fff;">${initiaal}</div>
-                           <div class="marker-label">${naam}</div>
-                       </div>`, 
-                 iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -14]
-            });
-            let marker = L.marker(center, { icon: customIcon, draggable: true });
-            
-            let popupContent = `<div class="popup-content"><h3>${naam}</h3><button class="btn-verwijder-anker" style="background:#dc2626; color:white; border:none; padding:6px; margin-top:8px; cursor:pointer; width:100%; border-radius:3px;">Verwijder</button></div>`;
-            let popup = L.popup().setContent(popupContent);
-            marker.bindPopup(popup).addTo(achtergrondMap); 
-            marker.on('popupopen', function(e) { let btn = e.popup.getElement().querySelector('.btn-verwijder-anker'); if(btn) btn.onclick = () => achtergrondMap.removeLayer(marker); });
-            iteratieTeller++;
-        }
+        // ========================================== 
+        // 7. ANKERS & LOCATIES
+        // ========================================== 
+        var iteratieTeller = 1; 
+        async function zoekAnkerLocatie(event) { 
+            let input = document.getElementById('anker-zoek').value; 
+            let btn = event.target;
+            let orgText = btn.innerHTML;
 
-        window.addEventListener('DOMContentLoaded', () => { 
-            astrolabium.init(); 
-            ocrSystem.init(); 
-        });
-    </script>
-</body>
+            if (!input) {
+                btn.innerHTML = "❌ Leeg veld";
+                setTimeout(() => { btn.innerHTML = orgText; }, 1500);
+                return;
+            }
+
+            btn.innerHTML = "⏳ Zoeken...";
+            let coordMatch = input.match(/(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)/); 
+
+            try {
+                if (coordMatch) { 
+                    achtergrondMap.flyTo([parseFloat(coordMatch[1]), parseFloat(coordMatch[2])], 14, { animate: true, duration: 1.5 }); 
+                    btn.innerHTML = "✔ Gevonden";
+                } else { 
+                    let res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(input)}`); 
+                    let data = await res.json(); 
+                    if (data.length > 0) {
+                        achtergrondMap.flyTo([parseFloat(data[0].lat), parseFloat(data[0].lon)], 14, { animate: true, duration: 1.5 }); 
+                        btn.innerHTML = "✔ Gevonden";
+                    } else {
+                        btn.innerHTML = "❌ Niet gevonden";
+                    }
+                } 
+            } catch(e) {
+                btn.innerHTML = "❌ Fout";
+            }
+            setTimeout(() => { btn.innerHTML = orgText; }, 2000);
+        } 
+
+        function plaatsAnker(vormType, event) { 
+            let center = achtergrondMap.getCenter(); 
+            let kleur = document.getElementById('marker-kleur').value; 
+            let naam = document.getElementById('anker-naam').value || `Anker ${iteratieTeller}`; 
+            let initiaal = naam.substring(0, 3).toUpperCase(); 
+            let markerId = 'dyn-maker-' + iteratieTeller; 
+             
+            var customIcon = L.divIcon({  
+                 className: '',  
+                 html: `<div class="roterende-groep dyn-maker" id="${markerId}"> 
+                            <div class="basis-vorm vorm-${vormType}" style="background-color: ${kleur}; border-color: #fff;">${initiaal}</div> 
+                            <div class="marker-label">${naam}</div> 
+                        </div>`,  
+                 iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -14] 
+            }); 
+            let marker = L.marker(center, { icon: customIcon, draggable: true }); 
+             
+            let popupContent = `<div class="popup-content"><h3>${naam}</h3><button class="btn-verwijder-anker" style="background:#dc2626; color:white; border:none; padding:6px; margin-top:8px; cursor:pointer; width:100%; border-radius:3px;">Verwijder</button></div>`; 
+            let popup = L.popup().setContent(popupContent); 
+            marker.bindPopup(popup).addTo(achtergrondMap);  
+
+            marker.on('popupopen', function(e) { let btn = e.popup.getElement().querySelector('.btn-verwijder-anker'); if(btn) btn.onclick = () => achtergrondMap.removeLayer(marker); }); 
+            iteratieTeller++; 
+            
+            let btn = event.target;
+            let oldText = btn.innerHTML;
+            btn.innerHTML = "✔";
+            setTimeout(()=>{ btn.innerHTML = oldText; }, 800);
+        } 
+
+        window.addEventListener('DOMContentLoaded', () => {  
+            astrolabium.init();  
+            ocrSystem.init();  
+        }); 
+    </script> 
+</body> 
 </html>
